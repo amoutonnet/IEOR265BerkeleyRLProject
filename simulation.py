@@ -21,7 +21,7 @@ def check_env(f):
 
 class Simulation():
 
-    def __init__(self, method='PG'):
+    def __init__(self, method):
         self.gamma = 0.99
         self.n_frames = 4
         self.env = None
@@ -77,12 +77,9 @@ class Simulation():
     def create_policy_gradient_networks(self, verbose=False):
         inputs = tf.keras.Input(shape=self.state_space_shape)
         advantages = tf.keras.Input(shape=(1,))
-        x = tf.keras.layers.Dense(32, activation='relu',
+        x = tf.keras.layers.Dense(16, activation='relu',
                                   use_bias=False,
                                   kernel_initializer=tf.keras.initializers.he_normal())(inputs)
-        x = tf.keras.layers.Dense(32, activation='relu',
-                                  use_bias=False,
-                                  kernel_initializer=tf.keras.initializers.he_normal())(x)
         outputs = tf.keras.layers.Dense(self.action_space_size, activation='softmax',
                                         use_bias=False,
                                         kernel_initializer=tf.keras.initializers.he_normal())(x)
@@ -95,16 +92,6 @@ class Simulation():
             return tf.keras.backend.mean(-log_lik * advantages, keepdims=True)
 
         self.policy.compile(loss=custom_loss, optimizer=self.optimizer, experimental_run_tf_function=False)
-        if verbose:
-            self.network.summary()
-
-    @check_env
-    def create_q_learning_networks(self, verbose=False):
-        # TO IMPLEMENT
-        self.network = None
-        if verbose:
-            self.network.summary()
-        pass
 
     @check_env
     def update_policy_gradient_network(self, rewards, states, actions):
@@ -129,9 +116,8 @@ class Simulation():
             while not done:
                 action_probs = self.predict(np.expand_dims(state, axis=0))
                 action = np.random.choice(self.action_space_size, p=action_probs[0].numpy())
-                obs, rew, done, _ = self.env.step(action)
+                next_state, rew, done, _ = self.env.step(action)
                 # next_state = np.append(state[:, 1:], np.expand_dims(obs, -1), axis=-1)
-                next_state = obs
                 states += [state]
                 rewards += [rew]
                 actions += [action]
@@ -147,8 +133,16 @@ class Simulation():
                     tf.summary.scalar('reward', mean_reward, step=ep + 1)
                     tf.summary.scalar('loss', loss, step=ep + 1)
 
+    @check_env
+    def create_q_learning_networks(self, verbose=False):
+        # TO IMPLEMENT
+        self.network = None
+        if verbose:
+            self.network.summary()
+        pass
+
 
 if __name__ == "__main__":
-    sim = Simulation()
+    sim = Simulation(method='PG')
     sim.make_env("CartPole-v0")
     sim.train_policy_gradient()
