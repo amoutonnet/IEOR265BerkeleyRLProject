@@ -7,7 +7,8 @@ import itertools as it
 from datetime import datetime
 from tqdm import tqdm
 
-tf.keras.backend.set_floatx('float64')
+
+tf.random.set_seed(1)
 
 
 def check_env(f):
@@ -23,10 +24,9 @@ class Simulation():
 
     def __init__(self, method):
         self.gamma = 0.99
-        self.n_frames = 4
         self.env = None
         self.method = method
-        self.optimizer = tf.keras.optimizers.Adam(1e-3)
+        self.optimizer = tf.keras.optimizers.Adam(1e-2)
 
     def make_env(self, name_of_environment, verbose=False):
         self.env = gym.make(name_of_environment)
@@ -39,7 +39,7 @@ class Simulation():
 
     @check_env
     def reset_env(self):
-        return self.env.reset()
+        return self.env.reset().astype(np.float32)
 
     @check_env
     def test_random(self, verbose=False):
@@ -48,7 +48,7 @@ class Simulation():
             self.env.render()
             obs, rew, done, info = self.env.step(self.env.action_space.sample())
             if verbose:
-                print(obs.shape, rew, info)
+                print(obs, rew, info)
             if done:
                 self.env.render()
                 break
@@ -68,7 +68,7 @@ class Simulation():
                 action = np.random.choice(self.action_space_size, p=action_probs[0].numpy())
                 obs, rew, done, _ = self.env.step(action)
                 rew_sum += rew
-                state = obs
+                state = obs.astype(np.float32)
             score += [rew_sum]
         self.env.close()
         return np.mean(score)
@@ -105,7 +105,6 @@ class Simulation():
 
     @check_env
     def train_policy_gradient(self, total_episodes=1000):
-        train_writer = tf.summary.create_file_writer(f"Logs/%sBreakout_%s" % (self.method, datetime.now().strftime('%d%m%Y%H%M')))
         total_reward = []
         for ep in range(total_episodes):
             state = self.reset_env()
@@ -117,21 +116,17 @@ class Simulation():
                 action_probs = self.predict(np.expand_dims(state, axis=0))
                 action = np.random.choice(self.action_space_size, p=action_probs[0].numpy())
                 next_state, rew, done, _ = self.env.step(action)
-                # next_state = np.append(state[:, 1:], np.expand_dims(obs, -1), axis=-1)
                 states += [state]
                 rewards += [rew]
                 actions += [action]
-                state = next_state
+                state = next_state.astype(np.float32)
             loss = self.update_policy_gradient_network(rewards, states, actions)
             total_reward += [sum(rewards)]
             if (ep + 1) % 50 == 0:
                 mean_reward = np.mean(total_reward)
                 total_reward = []
                 score = self.test_intelligent(10)
-                print("Episode: %d,  Mean Training Reward: %.2f, Test Score: %.2f, Loss: %.5f" % (ep + 1, mean_reward, score, loss))
-                with train_writer.as_default():
-                    tf.summary.scalar('reward', mean_reward, step=ep + 1)
-                    tf.summary.scalar('loss', loss, step=ep + 1)
+                print("Episode: %d,  Mean Training Reward: %.2f, Mean Test Score: %.2f, Loss: %.5f" % (ep + 1, mean_reward, score, loss))
 
     @check_env
     def create_q_learning_networks(self, verbose=False):
