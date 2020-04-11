@@ -3,6 +3,7 @@ import numpy as np
 from collections import deque
 import random
 import itertools
+import sys
 
 
 tf.random.set_seed(1)
@@ -14,18 +15,19 @@ class Agent():
                  action_space_size,              # The size of the action space
                  method='DQN',                   # The main method to use
                  variation=None,                 # Which variation of the method to use (None stands for original method)
-                 method_specific_parameters={},  # A fictionnary of parameters proper to the method
+                 method_specific_parameters={},  # A dictionnary of parameters proper to the method
                  gamma=0.99,                     # The discounting factor
                  lr1=1e-2,                       # A first learning rate
                  lr2=None,                       # A second learning rate
                  hidden_conv_layers=[],          # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],       # A list of parameters of for each hidden dense layer
+                 verbose=False                   # A live status of the training
                  ):
         assert(method in ['DQN', 'PGN'])
         if method == 'DQN':
-            assert(variation in [None, 'DDQN'])
+            assert(variation in [None, 'DoubleDQN', 'DuelingDDQN']), 'variation should be None, "DoubleDQN"or "DuelingDDQN"'
         else:
-            assert(variation in [None, 'AC'])
+            assert(variation in [None, 'AC']), 'variation should be None or "AC"'
         self.state_space_shape = state_space_shape
         self.action_space_size = action_space_size
         self.method = method
@@ -38,6 +40,7 @@ class Agent():
         self.hidden_dense_layers = hidden_dense_layers
         self.hidden_conv_layers = hidden_conv_layers
         self.current_loss = -1
+        self.verbose = verbose
         # We set the specific parameters of the method
         self.set_parameters(method_specific_parameters)
         # We build neural networks
@@ -72,11 +75,16 @@ class Agent():
         if len(self.state_space_shape) > 1:
             # Hidden Conv layers, relu activated
             for c in self.hidden_conv_layers:
-                x = tf.keras.layers.Conv1D(filters=c[0], kernel_size=c[1], activation='relu',
+                x = tf.keras.layers.Conv1D(filters=c[0], kernel_size=c[1], strides=c[2], activation='relu',
                                            kernel_initializer=tf.keras.initializers.he_normal())(x)
             # We flatten before dense layers
             x = tf.keras.layers.Flatten()(x)
         # Hidden Dense layers, relu activated
+        if self.variation == 'DuelingDDQN':
+            y = x # Share the same conv layers, but different FC net for states and actions values
+            for h in self.hidden_dense_layers:
+                y = tf.keras.layers.Dense(h, activation='relu',
+                                      kernel_initializer=tf.keras.initializers.he_normal())(y) # FC net for states values
         for h in self.hidden_dense_layers:
             x = tf.keras.layers.Dense(h, activation='relu',
                                       kernel_initializer=tf.keras.initializers.he_normal())(x)
@@ -111,12 +119,19 @@ class Agent():
 
         else:
             # One dense output layer, linear activated (to get Q value)
-            q_values = tf.keras.layers.Dense(self.action_space_size, activation='linear',
+            if self.variation == 'DuelingDDQN':
+                state_value = tf.keras.layers.Dense(1, activation=None, 
+                                             kernel_initializer=tf.keras.initializers.he_normal())(y)
+                action_advantages = tf.keras.layers.Dense(self.action_space_size, activation='linear',
+                                             kernel_initializer=tf.keras.initializers.he_normal())(x)
+                q_values = tf.math.add(state_value, tf.math.subtract(action_advantages, tf.math.reduce_mean(action_advantages, axis=1, keepdims=True)))
+            else:
+                q_values = tf.keras.layers.Dense(self.action_space_size, activation='linear',
                                              kernel_initializer=tf.keras.initializers.he_normal())(x)
 
             self.q_network = tf.keras.Model(inputs=states, outputs=q_values)   # One network to prdict Q values
 
-            if self.variation == 'DDQN':
+            if self.variation in ['DoubleDQN', 'DuelingDDQN']:
                 # Copy of the network for target calculation, updated every self.update_target_estimator_every
                 self.target_model = tf.keras.models.clone_model(self.q_network)
 
@@ -126,7 +141,7 @@ class Agent():
         """
         state = state[np.newaxis, :]
         if self.method == 'PGN':
-            action_probs = self.policy(state)  # We sample actions probabilities with the neural network
+            action_probs = self.policy(state)  # Sample actions probabilities with the neural network
             action = np.random.choice(self.action_space_size, p=action_probs[0].numpy())  # We sample the action based on these probabilities
         else:
             if train and np.random.rand() < self.epsilons[min(self.opti_step, len(self.epsilons) - 1)]:  # proba epsilon of making a random action choice
@@ -149,7 +164,7 @@ class Agent():
                 target = reward + self.gamma * critic_value_next * (1 - int(done))
                 advantage = target - critic_value
 
-                # We one hot encode the taken actions
+                # One hot encoding the taken actions
                 one_hot_encoded_actions = np.zeros((1, self.action_space_size))
                 one_hot_encoded_actions[np.arange(1), action] = 1
 
@@ -157,22 +172,22 @@ class Agent():
                 self.critic.train_on_batch(state, target)
         else:
             self.memory.append((state, action, reward, next_state, done))
-            if self.variation == 'DDQN':
+            if self.variation in ['DoubleDQN', 'DuelingDDQN']:
                 # Update target network if we reached the update step
                 if (self.opti_step + 1) % self.update_target_estimator_every == 0:
                     self.target_model.set_weights(self.q_network.get_weights())
             # Train on minibatch and update q network
             if len(self.memory) > self.batch_size:
-                # We retrieve a batch of experiences from the memory
+                # Retrieve a batch of experiences from the memory
                 mini_batch = random.sample(self.memory, self.batch_size)
                 states_batch, action_batch, rewards_batch, next_states_batch, done_batch = map(np.array, zip(*mini_batch))
-                if self.variation == 'DDQN':
-                    q_target_next_values = self.target_model(next_states_batch).numpy()
-                    value_next = np.max(q_target_next_values, axis=1)
+                if self.variation in ['DoubleDQN', 'DuelingDDQN']:
+                    best_next_actions = np.argmax(self.q_network(next_states_batch).numpy(), axis = 1)
+                    value_next = tf.math.reduce_sum(
+                        self.target_model(next_states_batch) * tf.one_hot(best_next_actions, self.action_space_size), axis=1)
                 else:
                     q_next_values = self.q_network(next_states_batch).numpy()
                     value_next = np.amax(q_next_values, axis=1)
-
                 actual_values = np.where(done_batch, rewards_batch, rewards_batch + self.gamma * value_next)
                 # Gradient Descent Update
                 with tf.GradientTape() as tape:
@@ -183,6 +198,7 @@ class Agent():
                 gradients = tape.gradient(loss, variables)
                 self.optimizer1.apply_gradients(zip(gradients, variables))
                 self.opti_step += 1
+                self.current_loss = loss
 
     def learn_end_ep(self):
         if self.method == 'PGN':
@@ -202,3 +218,11 @@ class Agent():
                 self.memory.clear()
         else:
             pass
+
+    def print_verbose(self, ep, total_episodes):
+        if self.verbose == True:
+            if self.method == 'PG':
+                pass
+            else:
+                print("\r ------ Epsilon ({:.2}) ReplayMemorySize ({}) OptiStep ({}) @ Episode {}/{} ------".format(self.epsilons[min(self.opti_step, len(self.epsilons) - 1)], len(self.memory), self.opti_step, ep+1, total_episodes), end="")
+                sys.stdout.flush()

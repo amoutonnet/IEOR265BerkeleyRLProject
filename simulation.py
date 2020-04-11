@@ -82,6 +82,7 @@ class Simulation():
                 obs, reward, done, _ = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
                 episode_reward += reward
                 next_state = self.get_next_state(state, obs)
+                self.agent.print_verbose(ep, total_episodes)
                 self.agent.learn_during_ep(state, action, reward, next_state, done)
                 state = next_state
             self.agent.learn_end_ep()
@@ -92,18 +93,18 @@ class Simulation():
                 mean_reward = np.mean(total_rewards)   # Mean reward over the last test_every episodes
                 total_rewards = []   # We reset the list of total rewards
                 score = self.test_intelligent(10)   # We simulate a few test games to track the evolution of the abilities of our agent
-                print("Episode: %d,  Mean Training Reward: %.2f, Mean Test Score: %.2f, Loss: %.5f" % (ep + 1, mean_reward, score, self.agent.current_loss))
+                print("\n Episode: %d,  Mean Training Reward: %.2f, Mean Test Score: %.2f, Loss: %.5f" % (ep + 1, mean_reward, score, self.agent.current_loss))
 
 
 if __name__ == "__main__":
     method = 'DQN'                # 'PGN' for policy gradient, 'DQN' Deep Q-Learning
-    variation = None            # Set to None for original method, otherwise 'AC' for 'PGN, 'DDQN' for 'DQN'
+    variation = 'DuelingDDQN'         # Set to None for original method, otherwise 'AC' for 'PGN, 'DoubleDQN' ro 'DuelingDDQN' for 'DQN'
     parameters_dqn = {
         'eps_start': 1.0,
         'eps_end': 0.1,
-        'eps_decay_steps': 100,
-        'replay_memory_size': 2000,
-        'update_target_estimator_every': 50,
+        'eps_decay_steps': 10000,
+        'replay_memory_size': 50000,
+        'update_target_estimator_every': 500,
         'batch_size': 32,
     }
     parameters_pgn = {}
@@ -117,6 +118,7 @@ if __name__ == "__main__":
         'lr2': 1e-5,                                      # A second learning rate (equal to the first one if None)
         'hidden_conv_layers': [],                         # A list of parameters ((nb of filters, size of filter)) for each hidden convolutionnal layer
         'hidden_dense_layers': [32],                 # A list of parameters (nb of neurons) for each hidden dense layer
+        'verbose': True,
     }
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", test_every=50, nb_stacked_frame=1, agent_params=agent_params)
