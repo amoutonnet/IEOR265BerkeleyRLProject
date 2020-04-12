@@ -3,7 +3,7 @@ import numpy as np
 from collections import deque
 import random
 import itertools
-
+import sys
 
 tf.random.set_seed(1)
 
@@ -92,8 +92,9 @@ class Agent():
             def actor_loss(y_true, y_pred):
                 # Here we define a custom loss
                 out = tf.keras.backend.clip(y_pred, 1e-8, 1 - 1e-8)  # We need to clip y_pred as it may be equal to zero (otherwise problem with log afterwards)
-                log_lik = y_true * tf.keras.backend.log(out)  # We get the log likelyhood associated to the predictions
-                return tf.keras.backend.mean(-log_lik * advantages)  # We multiply it by the advantage (future reward here), and return the mean
+                log_lik = tf.keras.backend.sum(y_true * tf.keras.backend.log(out), axis=1)  # We get the log likelyhood associated to the predictions
+                entropy = - tf.keras.backend.sum(out * tf.keras.backend.log(out), axis=1)
+                return tf.keras.backend.sum(- 0.001 * entropy - log_lik * advantages)  # We multiply it by the advantage (future reward here)
 
             self.actor.compile(loss=actor_loss, optimizer=self.optimizer1, experimental_run_tf_function=False)  # Compiling Actor for training with custom loss
 
@@ -104,10 +105,7 @@ class Agent():
 
                 self.critic = tf.keras.Model(inputs=states, outputs=value)  # Critic for training
 
-                def critic_loss(y_true, y_pred):
-                    return tf.keras.backend.mean(tf.keras.backend.square(y_true - y_pred))
-
-                self.critic.compile(loss=critic_loss, optimizer=self.optimizer2, experimental_run_tf_function=False)  # Compiling Critic for training
+                self.critic.compile(loss='mse', optimizer=self.optimizer2, experimental_run_tf_function=False)  # Compiling Critic for training
 
         else:
             # One dense output layer, linear activated (to get Q value)
@@ -137,24 +135,7 @@ class Agent():
 
     def learn_during_ep(self, state, action, reward, next_state, done):
         if self.method == 'PGN':
-            if self.variation is None:
-                self.memory.append((state, action, reward))
-            elif self.variation == 'AC':
-                state = state[np.newaxis, :]
-                next_state = next_state[np.newaxis, :]
-
-                critic_value_next = self.critic(next_state).numpy()[0]
-                critic_value = self.critic(state).numpy()[0]
-
-                target = reward + self.gamma * critic_value_next * (1 - int(done))
-                advantage = target - critic_value
-
-                # We one hot encode the taken actions
-                one_hot_encoded_actions = np.zeros((1, self.action_space_size))
-                one_hot_encoded_actions[np.arange(1), action] = 1
-
-                self.current_loss = self.actor.train_on_batch([state, advantage], one_hot_encoded_actions)
-                self.critic.train_on_batch(state, target)
+            self.memory.append((state, action, reward))
         else:
             self.memory.append((state, action, reward, next_state, done))
             if self.variation == 'DDQN':
@@ -186,19 +167,28 @@ class Agent():
 
     def learn_end_ep(self):
         if self.method == 'PGN':
-            if self.variation is None:
-                # We retrieve all states, actions and reward the agent got during the episode from the memory
-                states, actions, rewards = map(np.array, zip(*self.memory))
-                # Here we process the future discounted sum of reward for each step of the simulation
-                discounted_rewards = np.array(list(itertools.accumulate(rewards[::-1], lambda x, y: x * self.gamma + y))[::-1], dtype=np.float64)
-                # We reduce and center it
+            # We retrieve all states, actions and reward the agent got during the episode from the memory
+            states, actions, rewards = map(np.array, zip(*self.memory))
+            # Here we process the future discounted sum of reward for each step of the simulation
+            discounted_rewards = np.array(list(itertools.accumulate(rewards[::-1], lambda x, y: x * self.gamma + y))[::-1], dtype=np.float64)
+            # We reduce and center it
+            if any(discounted_rewards):
                 discounted_rewards -= np.mean(discounted_rewards)
                 discounted_rewards /= np.std(discounted_rewards)
-                # We one hot encode the taken actions
-                one_hot_encoded_actions = np.zeros((len(actions), self.action_space_size))
-                one_hot_encoded_actions[np.arange(len(actions)), actions.astype(int)] = 1
+            # We one hot encode the taken actions
+            one_hot_encoded_actions = np.zeros((len(actions), self.action_space_size))
+            one_hot_encoded_actions[np.arange(len(actions)), actions.astype(int)] = 1
+            if self.variation is None:
                 # And we train the neural network on this episode (which has given us a batch of actions, states and rewards)
                 self.current_loss = self.actor.train_on_batch([states, discounted_rewards], one_hot_encoded_actions)
-                self.memory.clear()
+            elif self.variation == 'AC':
+                # We process the states values with the critic network
+                critic_values = self.critic(states).numpy()
+                # We get the advantage (difference between the discounted reward and the baseline)
+                advantages = discounted_rewards[:, np.newaxis] - critic_values
+                # We train the two networks
+                self.current_loss = self.actor.train_on_batch([states, advantages], one_hot_encoded_actions)
+                self.critic.train_on_batch(states, discounted_rewards)
+            self.memory.clear()
         else:
             pass

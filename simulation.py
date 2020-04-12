@@ -10,11 +10,12 @@ import learning
 
 class Simulation():
 
-    def __init__(self, name_of_environment='CartPole-v0', test_every=50, nb_stacked_frame=1, agent_params={}):
+    def __init__(self, name_of_environment='CartPole-v0', test_every=50, test_on=10, nb_stacked_frame=1, agent_params={}):
         assert(nb_stacked_frame >= 1)
         # Main attributes of the Simulation
         self.env = gym.make(name_of_environment)   # We make the env
         self.test_every = test_every   # We will track the evolution of the training every test_every step
+        self.test_on = test_on   # We will test the agent over test_on test games
         self.nb_stacked_frame = nb_stacked_frame   # The number of frame observed we want to stack for the available state
         self.agent = learning.Agent(self.reset_env().shape, self.env.action_space.n, **agent_params)  # We create an intelligent agent
 
@@ -76,14 +77,19 @@ class Simulation():
             state = self.reset_env()  # We get x0
             episode_reward = 0
             done = False
+            # last_lives = 5
             # While the game is not finished
             while not done:
                 action = self.agent.take_action(state, train=True)  # we sample the action
-                obs, reward, done, _ = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
+                obs, reward, done, infos = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
+                # self.env.render()
+                # reward += infos['ale.lives'] - last_lives
+                # print(last_lives)
                 episode_reward += reward
                 next_state = self.get_next_state(state, obs)
                 self.agent.learn_during_ep(state, action, reward, next_state, done)
                 state = next_state
+                # last_lives = infos['ale.lives']
             self.agent.learn_end_ep()
 
             total_rewards += [episode_reward]
@@ -91,12 +97,12 @@ class Simulation():
                 # Every test_every episodes, we track the progress
                 mean_reward = np.mean(total_rewards)   # Mean reward over the last test_every episodes
                 total_rewards = []   # We reset the list of total rewards
-                score = self.test_intelligent(10)   # We simulate a few test games to track the evolution of the abilities of our agent
+                score = self.test_intelligent(self.test_on)   # We simulate a few test games to track the evolution of the abilities of our agent
                 print("Episode: %d,  Mean Training Reward: %.2f, Mean Test Score: %.2f, Loss: %.5f" % (ep + 1, mean_reward, score, self.agent.current_loss))
 
 
 if __name__ == "__main__":
-    method = 'DQN'                # 'PGN' for policy gradient, 'DQN' Deep Q-Learning
+    method = 'PGN'                # 'PGN' for policy gradient, 'DQN' Deep Q-Learning
     variation = None            # Set to None for original method, otherwise 'AC' for 'PGN, 'DDQN' for 'DQN'
     parameters_dqn = {
         'eps_start': 1.0,
@@ -113,12 +119,12 @@ if __name__ == "__main__":
         'variation': variation,
         'method_specific_parameters': method_parameters,  # A fictionnary of parameters proper to the method
         'gamma': 0.99,                                    # The discounting factor
-        'lr1': 1e-2,                                      # A first learning rate
-        'lr2': 1e-5,                                      # A second learning rate (equal to the first one if None)
-        'hidden_conv_layers': [],                         # A list of parameters ((nb of filters, size of filter)) for each hidden convolutionnal layer
-        'hidden_dense_layers': [32],                 # A list of parameters (nb of neurons) for each hidden dense layer
+        'lr1': 1e-3,                                      # A first learning rate
+        'lr2': 1e-4,                                      # A second learning rate (equal to the first one if None)
+        'hidden_conv_layers': [],                  # A list of parameters ((nb of filters, size of filter)) for each hidden convolutionnal layer
+        'hidden_dense_layers': [64],                      # A list of parameters (nb of neurons) for each hidden dense layer
     }
     # We create a Simulation object
-    sim = Simulation(name_of_environment="CartPole-v0", test_every=50, nb_stacked_frame=1, agent_params=agent_params)
+    sim = Simulation(name_of_environment="CartPole-v0", test_every=50, test_on=5, nb_stacked_frame=1, agent_params=agent_params)
     # We train the neural network
     sim.train(total_episodes=1000)
