@@ -77,19 +77,14 @@ class Simulation():
             state = self.reset_env()  # We get x0
             episode_reward = 0
             done = False
-            # last_lives = 5
             # While the game is not finished
             while not done:
                 action = self.agent.take_action(state, train=True)  # we sample the action
-                obs, reward, done, infos = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
-                # self.env.render()
-                # reward += infos['ale.lives'] - last_lives
-                # print(last_lives)
+                obs, reward, done, _ = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
                 episode_reward += reward
                 next_state = self.get_next_state(state, obs)
                 self.agent.learn_during_ep(state, action, reward, next_state, done)
                 state = next_state
-                # last_lives = infos['ale.lives']
             self.agent.learn_end_ep()
 
             total_rewards += [episode_reward]
@@ -98,12 +93,12 @@ class Simulation():
                 mean_reward = np.mean(total_rewards)   # Mean reward over the last test_every episodes
                 total_rewards = []   # We reset the list of total rewards
                 score = self.test_intelligent(self.test_on)   # We simulate a few test games to track the evolution of the abilities of our agent
-                print("Episode: %d,  Mean Training Reward: %.2f, Mean Test Score: %.2f, Loss: %.5f" % (ep + 1, mean_reward, score, self.agent.current_loss))
+                print("Episode: %d,  Mean Training Reward: %.2f, Mean Test Score: %.2f, Loss1: %.5f, Loss2: %.5f" % (ep + 1, mean_reward, score, self.agent.loss1, self.agent.loss2))
 
 
 if __name__ == "__main__":
     method = 'PGN'                # 'PGN' for policy gradient, 'DQN' Deep Q-Learning
-    variation = None            # Set to None for original method, otherwise 'AC' for 'PGN, 'DDQN' for 'DQN'
+    variation = 'PPO'            # Set to None for original method, otherwise 'AC' for 'PGN, 'DDQN' for 'DQN'
     parameters_dqn = {
         'eps_start': 1.0,
         'eps_end': 0.1,
@@ -112,7 +107,10 @@ if __name__ == "__main__":
         'update_target_estimator_every': 50,
         'batch_size': 32,
     }
-    parameters_pgn = {}
+    parameters_pgn = {
+        'temperature': 0.001,
+        'epsilon_ppo': 0.2,
+    }
     method_parameters = parameters_pgn if method == 'PGN' else parameters_dqn
     agent_params = {
         'method': method,
@@ -120,9 +118,9 @@ if __name__ == "__main__":
         'method_specific_parameters': method_parameters,  # A fictionnary of parameters proper to the method
         'gamma': 0.99,                                    # The discounting factor
         'lr1': 1e-3,                                      # A first learning rate
-        'lr2': 1e-4,                                      # A second learning rate (equal to the first one if None)
+        'lr2': 1e-3,                                      # A second learning rate (equal to the first one if None)
         'hidden_conv_layers': [],                  # A list of parameters ((nb of filters, size of filter)) for each hidden convolutionnal layer
-        'hidden_dense_layers': [64],                      # A list of parameters (nb of neurons) for each hidden dense layer
+        'hidden_dense_layers': [128, 64, 32],                      # A list of parameters (nb of neurons) for each hidden dense layer
     }
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", test_every=50, test_on=5, nb_stacked_frame=1, agent_params=agent_params)
