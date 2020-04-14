@@ -6,16 +6,15 @@ from tqdm import tqdm
 from collections import deque
 import random
 import learning
+import matplotlib.pyplot as plt
 
 
 class Simulation():
 
-    def __init__(self, name_of_environment='CartPole-v0', test_every=50, test_on=10, nb_stacked_frame=1, agent_params={}):
+    def __init__(self, name_of_environment='CartPole-v0', nb_stacked_frame=1, agent_params={}):
         assert(nb_stacked_frame >= 1)
         # Main attributes of the Simulation
         self.env = gym.make(name_of_environment)   # We make the env
-        self.test_every = test_every   # We will track the evolution of the training every test_every step
-        self.test_on = test_on   # We will test the agent over test_on test games
         self.nb_stacked_frame = nb_stacked_frame   # The number of frame observed we want to stack for the available state
         self.agent = learning.Agent(self.reset_env().shape, self.env.action_space.n, **agent_params)  # We create an intelligent agent
 
@@ -52,60 +51,61 @@ class Simulation():
         time.sleep(2)
         self.env.close()
 
-    def test_intelligent(self, num_tests):
-        # Here we simulate an intelligent evolution of the environment, with intelligent actions taken by the agent
-        score = []   # Over the num_tests games, we track the score of the agent at each game
-        for _ in range(num_tests):
-            done = False
-            state = self.reset_env()  # We get x0
-            rew_sum = 0   # We initialize the total reward of that game to 0
-            # We play a game
-            while not done:
-                self.env.render()   # We render the environment to vizualize it
-                action = self.agent.take_action(state)
-                obs, rew, done, _ = self.env.step(action)   # We take a step in the environment by taking the sampled action
-                rew_sum += rew   # We add the reward earned to the total reward
-                state = self.get_next_state(state, obs)   # We get the next state of the evironment
-            score += [rew_sum]   # Once the game is played, we store the total reward
-        self.env.close()   # Once every game is played, we close the rendered envrionment
-        return np.mean(score)   # We return the average score  over all games
-
-    def train(self, total_episodes=1000):
+    def train(self, target_score, max_episodes=1000, process_average_over=100, test_every=50, test_on=0):
+        print('\n%s\n' % ('Training'.center(100, '-')))
         # Here we train our neural network with the given method
-        total_rewards = []  # We initialize the total reward list
-        for ep in range(total_episodes):
+        training_score = np.empty((max_episodes,))
+        training_rolling_average = np.empty((max_episodes,))
+        total_rewards = deque(maxlen=process_average_over)  # We initialize the total reward list
+        rolling_mean_score = 0
+        ep = 0
+        while rolling_mean_score < target_score and ep < max_episodes:
             state = self.reset_env()  # We get x0
             episode_reward = 0
             done = False
+            visualize = (ep + 1) % test_every < test_on
             # While the game is not finished
             while not done:
                 action = self.agent.take_action(state, train=True)  # we sample the action
                 obs, reward, done, _ = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
+                if visualize:
+                    # If vizualise is greater than 0, we vizualize the environment
+                    self.env.render()
                 episode_reward += reward
                 next_state = self.get_next_state(state, obs)
-                self.agent.print_verbose(ep, total_episodes)
                 self.agent.learn_during_ep(state, action, reward, next_state, done)
                 state = next_state
             self.agent.learn_end_ep()
-
-            total_rewards += [episode_reward]
-            if (ep + 1) % self.test_every == 0:
-                # Every test_every episodes, we track the progress
-                mean_reward = np.mean(total_rewards)   # Mean reward over the last test_every episodes
-                total_rewards = []   # We reset the list of total rewards
-                score = self.test_intelligent(self.test_on)   # We simulate a few test games to track the evolution of the abilities of our agent
-                print("Episode: %d,  Mean Training Reward: %.2f, Mean Test Score: %.2f, Loss1: %.5f, Loss2: %.5f" % (ep + 1, mean_reward, score, self.agent.loss1, self.agent.loss2))
+            total_rewards.append(episode_reward)
+            rolling_mean_score = np.mean(total_rewards)
+            training_score[ep] = episode_reward
+            training_rolling_average[ep] = rolling_mean_score
+            self.agent.print_verbose(ep, max_episodes, episode_reward, rolling_mean_score)
+            self.env.close()
+            ep += 1
+        print('\n%s\n' % ('Training Done'.center(100, '-')))
+        training_score = training_score[:ep]
+        training_rolling_average = training_rolling_average[:ep]
+        plt.figure()
+        plt.plot(training_score, 'b', linewidth=1, label='Score')
+        plt.plot(training_rolling_average, 'orange', linewidth=1, label='Rolling Average')
+        plt.plot([target_score] * ep, 'r', linewidth=1, label='Target Score')
+        plt.title('Evolution of the score during the Training'.format(target_score))
+        plt.xlabel('Episodes')
+        plt.ylabel('Score')
+        plt.legend()
+        plt.show()
 
 
 if __name__ == "__main__":
     method = 'PGN'                # 'PGN' for policy gradient, 'DQN' Deep Q-Learning
-    variation = 'PPO'            # Set to None for original method, otherwise 'AC' for 'PGN, 'DDQN' for 'DQN'
+    variation = 'PPO'            # Set to None for original method, otherwise 'A2C'/'PPO' for 'PGN, 'DoubleDQN'/'DuelingDDQN' for 'DQN'
     parameters_dqn = {
         'eps_start': 1.0,
         'eps_end': 0.1,
         'eps_decay_steps': 10000,
-        'replay_memory_size': 50000,
-        'update_target_estimator_every': 500,
+        'replay_memory_size': 2000,
+        'update_target_estimator_every': 50,
         'batch_size': 32,
     }
     parameters_pgn = {
@@ -122,8 +122,9 @@ if __name__ == "__main__":
         'lr2': 1e-3,                                      # A second learning rate (equal to the first one if None)
         'hidden_conv_layers': [],                  # A list of parameters ((nb of filters, size of filter)) for each hidden convolutionnal layer
         'hidden_dense_layers': [128, 64, 32],                      # A list of parameters (nb of neurons) for each hidden dense layer
+        'verbose': True
     }
     # We create a Simulation object
-    sim = Simulation(name_of_environment="CartPole-v0", test_every=50, test_on=5, nb_stacked_frame=1, agent_params=agent_params)
+    sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1, agent_params=agent_params)
     # We train the neural network
-    sim.train(total_episodes=1000)
+    sim.train(target_score=100, max_episodes=1000, process_average_over=100, test_every=50, test_on=0)

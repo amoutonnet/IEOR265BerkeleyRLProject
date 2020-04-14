@@ -1,3 +1,6 @@
+
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 import numpy as np
 from collections import deque
@@ -32,9 +35,9 @@ class Agent():
                  ):
         assert(method in ['DQN', 'PGN'])
         if method == 'DQN':
-            assert(variation in [None, 'DoubleDQN', 'DuelingDDQN']), 'variation should be None, "DoubleDQN"or "DuelingDDQN"'
+            assert(variation in [None, 'DoubleDQN', 'DuelingDDQN'])  # variation should be None, "DoubleDQN"or "DuelingDDQN"
         else:
-            assert(variation in [None, 'AC', 'PPO'])
+            assert(variation in [None, 'A2C', 'PPO'])  # variation should be None, 'A2C' or 'PPO'
         self.state_space_shape = state_space_shape
         self.action_space_size = action_space_size
         self.method = method
@@ -104,7 +107,7 @@ class Agent():
             self.actor = tf.keras.Model(inputs=[states, advantages], outputs=actions_probs)  # Actor for training
 
             def actor_loss(y_true, y_pred):
-                if self.variation in [None, 'AC']:
+                if self.variation in [None, 'A2C']:
                     out = tf.keras.backend.clip(y_pred, DELTA, 1)  # We need to clip y_pred as it may be equal to zero (otherwise problem with log afterwards)
                     entropy_contrib = - tf.keras.backend.sum(out * tf.keras.backend.log(out), axis=1)
                     # Here we define a custom loss for vanilla policy gradient
@@ -122,7 +125,7 @@ class Agent():
 
             self.actor.compile(loss=actor_loss, optimizer=self.optimizer1, experimental_run_tf_function=False)  # Compiling Actor for training with custom loss
 
-            if self.variation in ['AC', 'PPO']:
+            if self.variation in ['A2C', 'PPO']:
                 # One dense output layer, linear activated (to get value of state)
                 value = tf.keras.layers.Dense(1, activation='linear',
                                               kernel_initializer=tf.keras.initializers.he_normal())(x)
@@ -169,7 +172,7 @@ class Agent():
         if self.method == 'PGN':
             if self.variation is None:
                 self.memory.append((state, action, reward))
-            elif self.variation == 'AC':
+            elif self.variation == 'A2C':
                 state = state[np.newaxis, :]
                 next_state = next_state[np.newaxis, :]
 
@@ -213,7 +216,7 @@ class Agent():
                 gradients = tape.gradient(loss, variables)
                 self.optimizer1.apply_gradients(zip(gradients, variables))
                 self.opti_step += 1
-                self.current_loss = loss
+                self.loss1 = loss
 
     def learn_end_ep(self):
         if self.method == 'PGN':
@@ -246,11 +249,13 @@ class Agent():
         else:
             pass
 
-    def print_verbose(self, ep, total_episodes):
+    def print_verbose(self, ep, total_episodes, episode_reward, rolling_score):
         if self.verbose == True:
-            if self.method == 'PG':
-                pass
+            print('Episode {:3d}/{:5d} | Current Score ({:.2f}) Rolling Average ({:.2f}) | '.format(ep + 1, total_episodes, episode_reward, rolling_score), end="")
+            if self.method == 'PGN':
+                print('Actor Loss ({:.4f}) Critic Loss ({:.4f})'.format(self.loss1, self.loss2), end="\r")
+                sys.stdout.flush()
             else:
-                print("\r ------ Epsilon ({:.2}) ReplayMemorySize ({}) OptiStep ({}) @ Episode {}/{} ------".format(
-                    self.epsilons[min(self.opti_step, len(self.epsilons) - 1)], len(self.memory), self.opti_step, ep + 1, total_episodes), end="")
+                print("Epsilon ({:.2f}) ReplayMemorySize ({:5d}) OptiStep ({:5d}) Loss ({:.4f})".format(
+                    self.epsilons[min(self.opti_step, len(self.epsilons) - 1)], len(self.memory), self.opti_step, self.loss1), end="\r")
                 sys.stdout.flush()
