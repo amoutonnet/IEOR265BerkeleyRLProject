@@ -170,24 +170,7 @@ class Agent():
     def learn_during_ep(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
         if self.method == 'PGN':
-            if self.variation is None:
-                self.memory.append((state, action, reward))
-            elif self.variation == 'A2C':
-                state = state[np.newaxis, :]
-                next_state = next_state[np.newaxis, :]
-
-                critic_value_next = self.critic(next_state).numpy()[0]
-                critic_value = self.critic(state).numpy()[0]
-
-                target = reward + self.gamma * critic_value_next * (1 - int(done))
-                advantage = target - critic_value
-
-                # One hot encoding the taken actions
-                one_hot_encoded_actions = np.zeros((1, self.action_space_size))
-                one_hot_encoded_actions[np.arange(1), action] = 1
-
-                self.current_loss = self.actor.train_on_batch([state, advantage], one_hot_encoded_actions)
-                self.critic.train_on_batch(state, target)
+            pass
         else:
             self.memory.append((state, action, reward, next_state, done))
             if self.variation in ['DoubleDQN', 'DuelingDDQN']:
