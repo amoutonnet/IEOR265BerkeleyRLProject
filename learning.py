@@ -63,7 +63,7 @@ class Agent():
         """
         if self.method == 'PGN':
             self.temperature = parameters['temperature']   # temperature parameter for entropy term in loss function
-            self.epsilon_ppo = parameters['epsilon_ppo']   # epsilon for ppo
+            self.epsilon_ppo = param    eters['epsilon_ppo']   # epsilon for ppo
             self.memory = deque()  # The memory used to track rewards, states and actions during an episode
         else:
             self.memory = deque(maxlen=parameters['replay_memory_size'])    # The memory used to track rewards, states and actions during an episode
@@ -115,7 +115,7 @@ class Agent():
                     return tf.keras.backend.mean(- log_lik * advantages - self.temperature * entropy_contrib, keepdims=True)  # We multiply it by the advantage (future reward here)
                 elif self.variation == 'PPO':
                     out = tf.keras.backend.clip(y_pred, DELTA, 1)
-                    entropy_contrib = tf.keras.backend.stop_gradient(tf.keras.backend.sum(out * tf.keras.backend.log(out), axis=1))
+                    entropy_contrib = self.temperature * tf.keras.backend.stop_gradient(tf.keras.backend.sum(out * tf.keras.backend.log(out), axis=1))
                     # Here we define a custom for proximal policy optimization
                     old_log_lik = tf.keras.backend.stop_gradient(y_true * tf.keras.backend.log(out))
                     log_lik = y_true * tf.keras.backend.log(out)
