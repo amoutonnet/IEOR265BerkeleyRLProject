@@ -83,6 +83,7 @@ class Simulation():
                 obs, reward, done, _ = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
                 episode_reward += reward
                 next_state = self.get_next_state(state, obs)
+                self.agent.print_verbose(ep, total_episodes)
                 self.agent.learn_during_ep(state, action, reward, next_state, done)
                 state = next_state
             self.agent.learn_end_ep()
@@ -102,9 +103,9 @@ if __name__ == "__main__":
     parameters_dqn = {
         'eps_start': 1.0,
         'eps_end': 0.1,
-        'eps_decay_steps': 100,
-        'replay_memory_size': 2000,
-        'update_target_estimator_every': 50,
+        'eps_decay_steps': 10000,
+        'replay_memory_size': 50000,
+        'update_target_estimator_every': 500,
         'batch_size': 32,
     }
     parameters_pgn = {
