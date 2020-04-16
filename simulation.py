@@ -90,7 +90,7 @@ class Simulation():
         plt.plot(training_score, 'b', linewidth=1, label='Score')
         plt.plot(training_rolling_average, 'orange', linewidth=1, label='Rolling Average')
         plt.plot([target_score] * ep, 'r', linewidth=1, label='Target Score')
-        plt.title('Evolution of the score during the Training'.format(target_score))
+        plt.title('Evolution of the score during the Training {}'.format(target_score))
         plt.xlabel('Episodes')
         plt.ylabel('Score')
         plt.legend()
@@ -98,15 +98,19 @@ class Simulation():
 
 
 if __name__ == "__main__":
-    method = 'PGN'                # 'PGN' for policy gradient, 'DQN' Deep Q-Learning
-    variation = 'PPO'            # Set to None for original method, otherwise 'A2C'/'PPO' for 'PGN, 'DoubleDQN'/'DuelingDDQN' for 'DQN'
+    method = 'DQN'                # 'PGN' for policy gradient, 'DQN' Deep Q-Learning
+    variation = ['DoubleDQN', 'PER']            # Set to None for original method, otherwise 'A2C'/'PPO' for 'PGN, 'DoubleDQN'/'DuelingDDQN' for 'DQN'
     parameters_dqn = {
         'eps_start': 1.0,
         'eps_end': 0.1,
-        'eps_decay_steps': 10000,
-        'replay_memory_size': 2000,
-        'update_target_estimator_every': 50,
-        'batch_size': 32,
+        'eps_decay_steps': 5000,
+        'replay_memory_size': 50000,
+        'update_target_estimator_every': 100,
+        'batch_size': 64,
+        'alpha_PER': 0.6,  # from paper, for Double DQN
+        'beta_PER': 0.4,  # from paper, for Double DQN
+        'beta_increment_PER': 0.0001,
+        'epsilon_PER': 0.001
     }
     parameters_pgn = {
         'temperature': 0.001,
@@ -120,11 +124,11 @@ if __name__ == "__main__":
         'gamma': 0.99,                                    # The discounting factor
         'lr1': 1e-3,                                      # A first learning rate
         'lr2': 1e-3,                                      # A second learning rate (equal to the first one if None)
-        'hidden_conv_layers': [],                  # A list of parameters ((nb of filters, size of filter)) for each hidden convolutionnal layer
-        'hidden_dense_layers': [128, 64, 32],                      # A list of parameters (nb of neurons) for each hidden dense layer
+        'hidden_conv_layers': [],                   # A list of parameters ((nb of filters, size of filter, strides)) for each hidden convolutionnal layer
+        'hidden_dense_layers': [64, 32],                      # A list of parameters (nb of neurons) for each hidden dense layer
         'verbose': True
     }
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1, agent_params=agent_params)
     # We train the neural network
-    sim.train(target_score=100, max_episodes=1000, process_average_over=100, test_every=50, test_on=0)
+    sim.train(target_score=195, max_episodes=1000, process_average_over=100, test_every=50, test_on=5)

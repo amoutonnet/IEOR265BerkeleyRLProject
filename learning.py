@@ -1,4 +1,3 @@
-
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
@@ -7,6 +6,7 @@ from collections import deque
 import random
 import itertools
 import sys
+import prioritized_exp_replay as PER
 
 tf.random.set_seed(1)
 
@@ -24,7 +24,7 @@ class Agent():
                  state_space_shape,              # The shape of the state space
                  action_space_size,              # The size of the action space
                  method='DQN',                   # The main method to use
-                 variation=None,                 # Which variation of the method to use (None stands for original method)
+                 variation=None,                 # A list of which variations of the method to use (None stands for original method)
                  method_specific_parameters={},  # A dictionnary of parameters proper to the method
                  gamma=0.99,                     # The discounting factor
                  lr1=1e-2,                       # A first learning rate
@@ -33,11 +33,11 @@ class Agent():
                  hidden_dense_layers=[32],       # A list of parameters of for each hidden dense layer
                  verbose=False                   # A live status of the training
                  ):
-        assert(method in ['DQN', 'PGN'])
+        assert(method in ['DQN', 'PGN']), 'Invalid method, select "DQN" or "PPO"'
         if method == 'DQN':
-            assert(variation in [None, 'DoubleDQN', 'DuelingDDQN'])  # variation should be None, "DoubleDQN"or "DuelingDDQN"
+            assert(set(variation) - set([None, 'DoubleDQN', 'DuelingDQN', 'PER']) == set()), 'variations should be None, "DoubleDQN", "DuelingDQN", "PER"'
         else:
-            assert(variation in [None, 'A2C', 'PPO'])  # variation should be None, 'A2C' or 'PPO'
+            assert(set(variation) - set([None, 'A2C', 'PPO']) == set()), 'variations should be None, "A2C" or "PPO"'
         self.state_space_shape = state_space_shape
         self.action_space_size = action_space_size
         self.method = method
@@ -55,7 +55,7 @@ class Agent():
         # We set the specific parameters of the method
         self.set_parameters(method_specific_parameters)
         # We build neural networks
-        self.build_network()
+        self.build_networks()
 
     def set_parameters(self, parameters):
         """
@@ -66,13 +66,24 @@ class Agent():
             self.epsilon_ppo = parameters['epsilon_ppo']   # epsilon for ppo
             self.memory = deque()  # The memory used to track rewards, states and actions during an episode
         else:
-            self.memory = deque(maxlen=parameters['replay_memory_size'])    # The memory used to track rewards, states and actions during an episode
+            if 'PER' in self.variation:                 # The memory used to track rewards, states and actions during an episode
+                self.memory = PER.memory(
+                    parameters['replay_memory_size'],
+                    parameters['alpha_PER'],            # Prioritization intensity
+                    parameters['beta_PER'],             # Initial value of Importance Sampling
+                    parameters['beta_increment_PER'],   # Increment for Importance Sampling
+                    parameters['epsilon_PER']           # Ensure non-zero probabilities for all transitions stored
+                )
+                self.memory_length = 0
+            else:
+                self.memory = deque(maxlen=parameters['replay_memory_size'])
+                self.memory_length = 0
             self.epsilons = np.linspace(parameters['eps_start'], parameters['eps_end'], parameters['eps_decay_steps'])   # epsilon greedy strategy (start, stop, decay)
             self.update_target_estimator_every = parameters['update_target_estimator_every']   # update the TD targets q-values every 50 optimization steps
             self.batch_size = parameters['batch_size']   # Batch size for learning
             self.opti_step = 0  # The number of optimization step done
 
-    def build_network(self):
+    def build_networks(self):
         """
         This function is used to build the neural networks needed for the given method
         """
@@ -88,7 +99,7 @@ class Agent():
             # We flatten before dense layers
             x = tf.keras.layers.Flatten()(x)
         # Hidden Dense layers, relu activated
-        if self.variation == 'DuelingDDQN':
+        if 'DuelingDQN' in self.variation:
             y = x  # Share the same conv layers, but different FC net for states and actions values
             for h in self.hidden_dense_layers:
                 y = tf.keras.layers.Dense(h, activation='relu',
@@ -107,13 +118,7 @@ class Agent():
             self.actor = tf.keras.Model(inputs=[states, advantages], outputs=actions_probs)  # Actor for training
 
             def actor_loss(y_true, y_pred):
-                if self.variation in [None, 'A2C']:
-                    out = tf.keras.backend.clip(y_pred, DELTA, 1)  # We need to clip y_pred as it may be equal to zero (otherwise problem with log afterwards)
-                    entropy_contrib = - tf.keras.backend.sum(out * tf.keras.backend.log(out), axis=1)
-                    # Here we define a custom loss for vanilla policy gradient
-                    log_lik = tf.keras.backend.sum(y_true * tf.keras.backend.log(out), axis=1)  # We get the log likelyhood associated to the predictions
-                    return tf.keras.backend.mean(- log_lik * advantages - self.temperature * entropy_contrib, keepdims=True)  # We multiply it by the advantage (future reward here)
-                elif self.variation == 'PPO':
+                if 'PPO' in self.variation:
                     out = tf.keras.backend.clip(y_pred, DELTA, 1)
                     # Here we define a custom for proximal policy optimization
                     log_lik = y_true * tf.keras.backend.log(out)
@@ -122,10 +127,16 @@ class Agent():
                     ratio = tf.keras.backend.sum(tf.keras.backend.exp(log_lik - old_log_lik), axis=1)
                     clipped_ratio = tf.keras.backend.clip(ratio, 1 - self.epsilon_ppo, 1 + self.epsilon_ppo)
                     return tf.keras.backend.mean(- tf.keras.backend.minimum(ratio * (advantages - entropy_contrib), clipped_ratio * (advantages - entropy_contrib)), keepdims=True)
+                else:
+                    out = tf.keras.backend.clip(y_pred, DELTA, 1)  # We need to clip y_pred as it may be equal to zero (otherwise problem with log afterwards)
+                    entropy_contrib = - tf.keras.backend.sum(out * tf.keras.backend.log(out), axis=1)
+                    # Here we define a custom loss for vanilla policy gradient
+                    log_lik = tf.keras.backend.sum(y_true * tf.keras.backend.log(out), axis=1)  # We get the log likelyhood associated to the predictions
+                    return tf.keras.backend.mean(- log_lik * advantages - self.temperature * entropy_contrib, keepdims=True)  # We multiply it by the advantage (future reward here)
 
             self.actor.compile(loss=actor_loss, optimizer=self.optimizer1, experimental_run_tf_function=False)  # Compiling Actor for training with custom loss
 
-            if self.variation in ['A2C', 'PPO']:
+            if 'PPO' in self.variation or 'A2C' in self.variation:
                 # One dense output layer, linear activated (to get value of state)
                 value = tf.keras.layers.Dense(1, activation='linear',
                                               kernel_initializer=tf.keras.initializers.he_normal())(x)
@@ -136,7 +147,7 @@ class Agent():
 
         else:
             # One dense output layer, linear activated (to get Q value)
-            if self.variation == 'DuelingDDQN':
+            if 'DuelingDQN' in self.variation:
                 state_value = tf.keras.layers.Dense(1, activation=None,
                                                     kernel_initializer=tf.keras.initializers.he_normal())(y)
                 action_advantages = tf.keras.layers.Dense(self.action_space_size, activation='linear',
@@ -148,7 +159,7 @@ class Agent():
 
             self.q_network = tf.keras.Model(inputs=states, outputs=q_values)   # One network to prdict Q values
 
-            if self.variation in ['DoubleDQN', 'DuelingDDQN']:
+            if 'DoubleDQN' in self.variation:
                 # Copy of the network for target calculation, updated every self.update_target_estimator_every
                 self.target_model = tf.keras.models.clone_model(self.q_network)
 
@@ -168,21 +179,30 @@ class Agent():
         return action
 
     def learn_during_ep(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
+        if 'PER' in self.variation:
+            self.memory.store((state, action, reward, next_state, done))
+        else:
+            self.memory.append((state, action, reward, next_state, done))
         if self.method == 'PGN':
             pass
         else:
-            self.memory.append((state, action, reward, next_state, done))
-            if self.variation in ['DoubleDQN', 'DuelingDDQN']:
+            if 'DoubleDQN' in self.variation:
                 # Update target network if we reached the update step
                 if (self.opti_step + 1) % self.update_target_estimator_every == 0:
                     self.target_model.set_weights(self.q_network.get_weights())
             # Train on minibatch and update q network
-            if len(self.memory) > self.batch_size:
+            if 'PER' in self.variation:
+                self.memory_length = self.memory.len_memory
+            else:
+                self.memory_length = len(self.memory)
+            if self.memory_length > self.batch_size:
                 # Retrieve a batch of experiences from the memory
-                mini_batch = random.sample(self.memory, self.batch_size)
+                if 'PER' in self.variation:
+                    tree_idx, mini_batch, ISweights = self.memory.sample(self.batch_size)
+                else:
+                    mini_batch = random.sample(self.memory, self.batch_size)
                 states_batch, action_batch, rewards_batch, next_states_batch, done_batch = map(np.array, zip(*mini_batch))
-                if self.variation in ['DoubleDQN', 'DuelingDDQN']:
+                if 'DoubleDQN' in self.variation:
                     best_next_actions = np.argmax(self.q_network(next_states_batch).numpy(), axis=1)
                     value_next = tf.math.reduce_sum(
                         self.target_model(next_states_batch) * tf.one_hot(best_next_actions, self.action_space_size), axis=1)
@@ -194,9 +214,16 @@ class Agent():
                 with tf.GradientTape() as tape:
                     selected_action_values = tf.math.reduce_sum(
                         self.q_network(states_batch) * tf.one_hot(action_batch, self.action_space_size), axis=1)
-                    loss = tf.math.reduce_mean(tf.square(actual_values - selected_action_values))
+                    TD_errors = actual_values - selected_action_values
+                    loss = tf.math.reduce_mean(tf.square(TD_errors))
                 variables = self.q_network.trainable_variables
                 gradients = tape.gradient(loss, variables)
+                if 'PER' in self.variation:
+                    gradients = tf.math.multiply(
+                        gradients,
+                        tf.convert_to_tensor(ISweights / np.max(ISweights), dtype=tf.float32)
+                    )
+                    self.memory.batch_update(tree_idx, np.abs(TD_errors))
                 self.optimizer1.apply_gradients(zip(gradients, variables))
                 self.opti_step += 1
                 self.loss1 = loss
@@ -215,7 +242,7 @@ class Agent():
                 discounted_rewards = normalize(discounted_rewards)
                 # And we train the neural network on this episode (which has given us a batch of actions, states and rewards)
                 self.loss1 = self.actor.train_on_batch([states, discounted_rewards], one_hot_encoded_actions)
-            elif self.variation in ['AC', 'PPO']:
+            elif 'AC' in self.variation or 'PPO' in self.variation:
                 # We process the states values with the critic network
                 critic_values = self.critic(states).numpy()
                 critic_next_values = self.critic(next_states).numpy()
@@ -234,7 +261,7 @@ class Agent():
 
     def print_verbose(self, ep, total_episodes, episode_reward, rolling_score):
         if self.verbose == True:
-            print('Episode {:3d}/{:5d} | Current Score ({:.2f}) Rolling Average ({:.2f}) | '.format(ep + 1, total_episodes, episode_reward, rolling_score), end="")
+            print('Episode {:3d}/{:5d} | Current Score ({:3.2f}) Rolling Average ({:3.2f}) | '.format(ep + 1, total_episodes, episode_reward, rolling_score), end="")
             if self.method == 'PGN':
                 print('Actor Loss ({:.4f}) Critic Loss ({:.4f})'.format(self.loss1, self.loss2), end="\r")
             else:
