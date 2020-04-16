@@ -104,7 +104,6 @@ class memory(object):
         # Increasing beta each time a minibatch is sampled
         self.beta = np.min([1., self.beta + self.beta_increment])  # max = 1
         
-        # min_prob = np.min(self.tree.tree[-self.tree.capacity:]) / self.tree.total_priority
         for i in range(n):
             a, b = priority_segment * i, priority_segment * (i + 1)
             v = np.random.uniform(a, b)
