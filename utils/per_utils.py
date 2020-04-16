@@ -101,15 +101,15 @@ class PrioritizedExperienceMemory(SumTree):
         batch_memory = []
         ISWeights = np.empty((1, n))  # Importance sampling weights: correct bias introduced by th change in distribution of experiences
 
-        priority_segment = self.tree.total_priority / n
+        priority_segment = self.total_priority / n
         # Increasing beta each time a minibatch is sampled
         self.beta = np.min([1., self.beta + self.beta_increment])  # max = 1
 
         for i in range(n):
             a, b = priority_segment * i, priority_segment * (i + 1)
             v = np.random.uniform(a, b)
-            idx, priority, data = self.tree.get_leaf(v)
-            sampling_prob = priority / self.tree.total_priority
+            idx, priority, data = self.get_leaf(v)
+            sampling_prob = priority / self.total_priority
             # IS = (1/P(i))**b /max wi == P(i)**(-b)  /max wi
             ISWeights[:, i] = np.power(n * sampling_prob, -self.beta)
             batch_idx[i] = idx
@@ -124,7 +124,7 @@ class PrioritizedExperienceMemory(SumTree):
         clipped_errors = np.minimum(abs_errors, self.abs_error_upper)
         transition_probs = np.power(clipped_errors, self.alpha)
         for ti, p in zip(tree_idx, transition_probs):
-            self.tree.update(ti, p)
+            self.update(ti, p)
 
     def __len__(self):
         return self.len_memory

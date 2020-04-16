@@ -6,8 +6,6 @@ import numpy as np
 import random
 from . import per_utils
 
-DELTA = agent.DELTA
-
 
 class AgentDQLBase(agent.Agent):
 
@@ -162,7 +160,7 @@ class AgentDQL(AgentDQLBase):
             )([state_values, centered_actions_advantages])
 
         # The QNetwork
-        self.q_network = tf.keras.Model(inputs=states, outputs=q_values, name='Q-Network_%s' % self.main_name)
+        self.q_network = tf.keras.Model(inputs=states, outputs=q_values, name='Q-Network')
 
         if self.use_double:
             # Copy of the network for target calculation, updated every self.update_target_estimator_every
@@ -202,14 +200,12 @@ class AgentDQL(AgentDQLBase):
                 selected_action_values = tf.math.reduce_sum(
                     self.q_network(states_batch) * tf.one_hot(action_batch, self.action_space_size), axis=1)
                 td_errors = actual_values - selected_action_values
+                if self.use_per:
+                    td_errors = ISweights * td_errors / np.max(ISweights)
                 self.loss = tf.math.reduce_mean(tf.square(td_errors))
             variables = self.q_network.trainable_variables
             gradients = tape.gradient(self.loss, variables)
             if self.use_per:
-                gradients = tf.math.multiply(
-                    gradients,
-                    tf.convert_to_tensor(ISweights / np.max(ISweights), dtype=tf.float32)
-                )
                 self.memory.batch_update(tree_idx, np.abs(td_errors))
             self.optimizer.apply_gradients(zip(gradients, variables))
             self.opti_step += 1

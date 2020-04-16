@@ -111,47 +111,47 @@ if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    agent = agent_pg.AgentPG(
-        sim.state_space_shape,
-        sim.action_space_size,
-        gamma=0.99,
-        hidden_conv_layers=[],
-        hidden_dense_layers=[32],
-        verbose=True,
-        lr_actor=1e-2,
-        lr_critic=1e-2,
-        temperature=1e-3,
-        ppo_dict={
-            'used': True,
-            'epsilon': 0.2
-        }
-    )
-    # agent = agent_dql.AgentDQL(
-    #     sim.state_space_shape,             # The shape of the state space
-    #     sim.action_space_size,             # The size of the action space
-    #     gamma=0.99,                        # The discounting factor
-    #     hidden_conv_layers=[],             # A list of parameters of for each hidden convolutionnal layer
-    #     hidden_dense_layers=[32],          # A list of parameters of for each hidden dense layer
-    #     verbose=True,                     # A live status of the training
-    #     lr=1e-2,                           # The learning rate
-    #     max_memory_size=2000,              # The maximum size of the replay memory
-    #     epsilon_behavior=(1, 0.1, 100),    # The decay followed by epsilon
-    #     batch_size=32,                     # The batch size used during the training
-    #     double_dict={
-    #         'used': True,                  # Whether we use double q learning or not
-    #         'update_targest_every': 50     # Update the TD targets q-values every update_targest_every optimization steps
-    #     },
-    #     dueling_dict={
-    #         'used': True,                  # Whether we use dueling q learning or not
-    #     },
-    #     per_dict={
-    #         'used': False,                 # Whether we use prioritized experience replay or not
-    #         'alpha': 0.6,                  #
-    #         'beta': 0.4,                   #
-    #         'beta_increment': 0.001,       #
-    #         'epsilon': 0.001               #
+    # agent = agent_pg.AgentPG(
+    #     sim.state_space_shape,
+    #     sim.action_space_size,
+    #     gamma=0.99,
+    #     hidden_conv_layers=[],
+    #     hidden_dense_layers=[32],
+    #     verbose=True,
+    #     lr_actor=1e-2,
+    #     lr_critic=1e-2,
+    #     temperature=1e-3,
+    #     ppo_dict={
+    #         'used': True,
+    #         'epsilon': 0.2
     #     }
     # )
+    agent = agent_dql.AgentDQL(
+        sim.state_space_shape,             # The shape of the state space
+        sim.action_space_size,             # The size of the action space
+        gamma=0.99,                        # The discounting factor
+        hidden_conv_layers=[],             # A list of parameters of for each hidden convolutionnal layer
+        hidden_dense_layers=[32],          # A list of parameters of for each hidden dense layer
+        verbose=True,                     # A live status of the training
+        lr=1e-2,                           # The learning rate
+        max_memory_size=2000,              # The maximum size of the replay memory
+        epsilon_behavior=(1, 0.1, 100),    # The decay followed by epsilon
+        batch_size=32,                     # The batch size used during the training
+        double_dict={
+            'used': True,                  # Whether we use double q learning or not
+            'update_targest_every': 50     # Update the TD targets q-values every update_targest_every optimization steps
+        },
+        dueling_dict={
+            'used': True,                  # Whether we use dueling q learning or not
+        },
+        per_dict={
+            'used': True,                 # Whether we use prioritized experience replay or not
+            'alpha': 0.6,                  #
+            'beta': 0.4,                   #
+            'beta_increment': 0.001,       #
+            'epsilon': 0.001               #
+        }
+    )
     # We build the neural network
     agent.build_network()
     # We set this agent in the simulation

@@ -51,9 +51,9 @@ class AgentPGBase(agent.Agent):
                                               name='%s_probs' % self.main_name
                                               )(x)
         # Policy model to predict only
-        self.policy = tf.keras.Model(inputs=states, outputs=actions_probs, name='Policy_%s' % self.main_name)
+        self.policy = tf.keras.Model(inputs=states, outputs=actions_probs, name='Policy')
         # Actor model to learn
-        self.actor = tf.keras.Model(inputs=[states, advantages], outputs=actions_probs, name='Actor_%s' % self.main_name)
+        self.actor = tf.keras.Model(inputs=[states, advantages], outputs=actions_probs, name='Actor')
 
         # Conv layers for critic
         x = self.create_conv_layers(states, 'critic')
@@ -66,7 +66,7 @@ class AgentPGBase(agent.Agent):
                                        name='%s_values' % self.main_name
                                        )(x)
         # Critic model to learn
-        self.critic = tf.keras.Model(inputs=states, outputs=values, name='Critic_%s' % self.main_name)
+        self.critic = tf.keras.Model(inputs=states, outputs=values, name='Critic')
         # Compiling critic model
         self.critic.compile(loss='mse', optimizer=self.optimizer_critic, experimental_run_tf_function=False)
 
