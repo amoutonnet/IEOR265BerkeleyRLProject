@@ -15,6 +15,7 @@ class AgentDQLBase(agent.Agent):
                  gamma=0.99,                      # The discounting factor
                  hidden_conv_layers=[],           # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],        # A list of parameters of for each hidden dense layer
+                 initializer=tf.keras.initializers.RandomNormal(),
                  verbose=False,                   # A live status of the training
                  lr=1e-2,                         # The learning rate
                  max_memory_size=2000,            # The maximum size of the replay memory
@@ -27,6 +28,7 @@ class AgentDQLBase(agent.Agent):
             gamma=gamma,
             hidden_conv_layers=hidden_conv_layers,
             hidden_dense_layers=hidden_dense_layers,
+            initializer=initializer,
             verbose=verbose
         )
         self.optimizer = tf.keras.optimizers.Adam(lr)
@@ -41,9 +43,7 @@ class AgentDQLBase(agent.Agent):
     def print_verbose(self, ep, total_episodes, episode_reward, rolling_score):
         if self.verbose:
             current_eps = self.epsilons[min(self.opti_step, len(self.epsilons) - 1)]
-            print('Episode {:3d}/{:5d}\
-                 | Current Score ({:3.2f}) Rolling Average ({:3.2f}) \
-                 | Epsilon ({:.2f}) ReplayMemorySize ({:5d}) OptiStep ({:5d}) Loss ({:.4f})'.format(ep,
+            print('Episode {:3d}/{:5d} | Current Score ({:3.2f}) Rolling Average ({:3.2f}) | Epsilon ({:.2f}) ReplayMemorySize ({:5d}) OptiStep ({:5d}) Loss ({:.4f})'.format(ep,
                                                                                                     total_episodes,
                                                                                                     episode_reward,
                                                                                                     rolling_score,
@@ -65,6 +65,7 @@ class AgentDQL(AgentDQLBase):
                  gamma=0.99,                        # The discounting factor
                  hidden_conv_layers=[],             # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],          # A list of parameters of for each hidden dense layer
+                 initializer=tf.keras.initializers.RandomNormal(),
                  verbose=False,                     # A live status of the training
                  lr=1e-2,                           # The learning rate
                  max_memory_size=2000,              # The maximum size of the replay memory
@@ -72,17 +73,17 @@ class AgentDQL(AgentDQLBase):
                  batch_size=32,                     # The batch size used during the training
                  double_dict={
                      'used': False,                 # Whether we use double q learning or not
-                     'update_targest_every': 50     # Update the TD targets q-values every update_targest_every optimization steps
+                     'update_target_every': 50      # Update the TD targets q-values every update_target_every optimization steps
                  },
                  dueling_dict={
                      'used': False,                 # Whether we use dueling q learning or not
                  },
                  per_dict={
                      'used': False,                 # Whether we use prioritized experience replay or not
-                     'alpha': 0.6,                  #
-                     'beta': 0.4,                   #
-                     'beta_increment': 0.001,       #
-                     'epsilon': 0.001               #
+                     'alpha': 0.6,                  # Prioritization intensity
+                     'beta': 0.4,                   # Initial parameter for Importance Sampling
+                     'beta_increment': 0.001,       # Increment per sampling for Importance Sampling
+                     'epsilon': 0.001               # Value assigned to have non-zero probailities
                  }):
         super().__init__(
             state_space_shape=state_space_shape,
@@ -90,6 +91,7 @@ class AgentDQL(AgentDQLBase):
             gamma=gamma,
             hidden_conv_layers=hidden_conv_layers,
             hidden_dense_layers=hidden_dense_layers,
+            initializer=initializer,
             verbose=verbose,
             lr=lr,
             max_memory_size=max_memory_size,
@@ -100,7 +102,7 @@ class AgentDQL(AgentDQLBase):
         self.use_dueling = dueling_dict.pop('used')
         self.use_per = per_dict.pop('used')
         if self.use_double:
-            self.update_targest_every = double_dict['update_targest_every']
+            self.update_target_every = double_dict['update_target_every']
         if self.use_per:
             self.memory = per_utils.PrioritizedExperienceMemory(
                 self.max_memory_size,
@@ -123,7 +125,7 @@ class AgentDQL(AgentDQLBase):
             # Qvalues as output
             q_values = tf.keras.layers.Dense(units=self.action_space_size,
                                              activation='linear',
-                                             kernel_initializer=tf.keras.initializers.he_normal(),
+                                             kernel_initializer=self.initializer,
                                              name='%s_qvalues' % self.main_name)(x)
         else:
             # Separated dense layers for state values and actions advantages
@@ -132,14 +134,14 @@ class AgentDQL(AgentDQLBase):
             # states values
             state_values = tf.keras.layers.Dense(units=1,
                                                  activation='linear',
-                                                 kernel_initializer=tf.keras.initializers.he_normal(),
+                                                 kernel_initializer=self.initializer,
                                                  name='%s_values' % self.main_name
                                                  )(y)
 
             # actions advantages
             actions_advantages = tf.keras.layers.Dense(units=self.action_space_size,
                                                        activation='linear',
-                                                       kernel_initializer=tf.keras.initializers.he_normal(),
+                                                       kernel_initializer=self.initializer,
                                                        name='%s_advantages' % self.main_name
                                                        )(x)
 
@@ -185,7 +187,7 @@ class AgentDQL(AgentDQLBase):
         return np.amax(q_next_values, axis=1)
 
     def learn_off_policy(self):
-        if self.use_double and (self.opti_step + 1) % self.update_targest_every == 0:
+        if self.use_double and (self.opti_step + 1) % self.update_target_every == 0:
             self.target_model.set_weights(self.q_network.get_weights())
         if len(self.memory) >= self.batch_size:
             if self.use_per:
@@ -206,7 +208,7 @@ class AgentDQL(AgentDQLBase):
             variables = self.q_network.trainable_variables
             gradients = tape.gradient(self.loss, variables)
             if self.use_per:
-                self.memory.batch_update(tree_idx, np.abs(td_errors))
+                self.memory.batch_update(tree_idx, tf.math.abs(td_errors)[0])
             self.optimizer.apply_gradients(zip(gradients, variables))
             self.opti_step += 1
 

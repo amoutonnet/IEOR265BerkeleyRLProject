@@ -9,6 +9,7 @@ from collections import deque
 from utils import agent_dql
 from utils import agent_pg
 import matplotlib.pyplot as plt
+import tensorflow.keras.initializers as tfinitializers
 
 
 class Simulation():
@@ -113,7 +114,7 @@ if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    method = 'DQL'
+    method = 'PG'
     if method == 'PG':
         agent = agent_pg.AgentPG(
             sim.state_space_shape,              # The size of the spate space
@@ -121,6 +122,7 @@ if __name__ == "__main__":
             gamma=0.99,                         # The discounting factor
             hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer
             hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
+            initializer=tfinitializers.RandomNormal(),
             verbose=True,                       # A live status of the training
             lr_actor=1e-2,                      # Learning rate
             lr_critic=1e-2,                     # Learning rate for A2C critic part
@@ -137,6 +139,7 @@ if __name__ == "__main__":
             gamma=0.99,                         # The discounting factor
             hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer
             hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
+            initializer=tfinitializers.RandomNormal(),
             verbose=True,                       # A live status of the training
             lr=1e-2,                            # The learning rate
             max_memory_size=40000,              # The maximum size of the replay memory
@@ -162,4 +165,4 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent
-    sim.train(target_score=190, max_episodes=1000, process_average_over=100, test_every=50, test_on=5, save_training_data=True)
+    sim.train(target_score=190, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=True)

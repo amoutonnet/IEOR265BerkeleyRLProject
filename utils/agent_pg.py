@@ -15,6 +15,7 @@ class AgentPGBase(agent.Agent):
                  hidden_conv_layers=[],          # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],       # A list of parameters of for each hidden dense layer
                  verbose=False,                  # A live status of the training
+                 initializer=tf.keras.initializers.RandomNormal(),
                  lr_actor=1e-2,                  # A first learning rate
                  lr_critic=1e-2,                 # A second learning rate
                  temperature=1e-3                # The temperature parameter for entropy
@@ -25,6 +26,7 @@ class AgentPGBase(agent.Agent):
             gamma=gamma,
             hidden_conv_layers=hidden_conv_layers,
             hidden_dense_layers=hidden_dense_layers,
+            initializer=initializer,
             verbose=verbose
         )
         self.optimizer_actor = tf.keras.optimizers.Adam(lr_actor)
@@ -47,7 +49,7 @@ class AgentPGBase(agent.Agent):
         # One dense output layer, softmax activated (to get probabilities)
         actions_probs = tf.keras.layers.Dense(units=self.action_space_size,
                                               activation='softmax',
-                                              kernel_initializer=tf.keras.initializers.he_normal(),
+                                              kernel_initializer=self.initializer,
                                               name='%s_probs' % self.main_name
                                               )(x)
         # Policy model to predict only
@@ -62,7 +64,7 @@ class AgentPGBase(agent.Agent):
         # One dense output layer, linear activated (to get value of state)
         values = tf.keras.layers.Dense(units=1,
                                        activation='linear',
-                                       kernel_initializer=tf.keras.initializers.he_normal(),
+                                       kernel_initializer=self.initializer,
                                        name='%s_values' % self.main_name
                                        )(x)
         # Critic model to learn
@@ -112,6 +114,7 @@ class AgentPG(AgentPGBase):
                  hidden_conv_layers=[],          # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],       # A list of parameters of for each hidden dense layer
                  verbose=False,                  # A live status of the training
+                 initializer=tf.keras.initializers.RandomNormal(),
                  lr_actor=1e-2,                  # A first learning rate
                  lr_critic=1e-2,                 # A second learning rate
                  temperature=1e-3,               # The temperature parameter for entropy
@@ -125,6 +128,7 @@ class AgentPG(AgentPGBase):
             gamma=gamma,
             hidden_conv_layers=hidden_conv_layers,
             hidden_dense_layers=hidden_dense_layers,
+            initializer=initializer,
             verbose=verbose,
             lr_actor=lr_actor,
             lr_critic=lr_critic,

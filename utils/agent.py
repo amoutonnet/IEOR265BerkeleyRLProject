@@ -11,6 +11,7 @@ class Agent():
                  gamma=0.99,                     # The discounting factor
                  hidden_conv_layers=[],          # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],       # A list of parameters of for each hidden dense layer
+                 initializer=tf.keras.initializers.RandomNormal(),      
                  verbose=False                   # A live status of the training
                  ):
         self.state_space_shape = state_space_shape
@@ -18,6 +19,7 @@ class Agent():
         self.gamma = gamma
         self.hidden_dense_layers = hidden_dense_layers
         self.hidden_conv_layers = hidden_conv_layers
+        self.initializer = initializer
         self.verbose = verbose
         self.main_name = None
 
@@ -28,9 +30,10 @@ class Agent():
             for id_, c in enumerate(self.hidden_conv_layers):
                 x = tf.keras.layers.Conv1D(filters=c[0],
                                            kernel_size=c[1],
+                                           strides = c[2],
                                            padding='same',
                                            activation='relu',
-                                           kernel_initializer=tf.keras.initializers.he_normal(),
+                                           kernel_initializer=self.initializer,
                                            name='%s_conv_%d' % (name, id_),
                                            )(x)
             # We flatten before dense layers
@@ -42,7 +45,7 @@ class Agent():
         for id_, h in enumerate(self.hidden_dense_layers):
             x = tf.keras.layers.Dense(units=h,
                                       activation='relu',
-                                      kernel_initializer=tf.keras.initializers.he_normal(),
+                                      kernel_initializer=self.initializer,
                                       name='%s_dense_%d' % (name, id_),
                                       )(x)
         return x

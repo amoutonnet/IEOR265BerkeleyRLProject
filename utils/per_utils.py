@@ -16,10 +16,10 @@ class SumTree():
         """ 
         Initialize the tree with all nodes = 0, and initialize the data with all values = 0
         """
-        self.capacity = capacity  # Number of leaf nodes (final nodes) that contains experiences
-        self.tree = np.zeros(2 * capacity - 1)  # each node has max two children, root node is alone: capacity -1 parents, capacity leaf nodes
-        self.data = np.zeros(capacity, dtype=object)  # Experiences
-        self.data_pointer = 0
+        self.capacity = capacity                        # Number of leaf nodes (final nodes) that contains experiences
+        self.tree = np.zeros(2 * capacity - 1)          # each node has max two children, root node is alone: capacity -1 parents, capacity leaf nodes
+        self.data = np.zeros(capacity, dtype=object)    # Transition
+        self.data_pointer = 0                           # Transition index in the data 
 
     def add(self, new_priority, new_data):
         """
@@ -78,12 +78,15 @@ class PrioritizedExperienceMemory(SumTree):
 
     def __init__(self, capacity, alpha, beta, beta_increment, epsilon, abs_error_upper=1):
         super().__init__(capacity)
-        self.epsilon = epsilon  # Ensure that all probabilities are non-zero
-        self.alpha = alpha  # Tradeoff between prioritized and random exp replay
-        self.beta = beta  # Initial value of importance-sampling, increasing to 1
-        self.beta_increment = beta_increment  # Increment value for importance-sampling
-        self.abs_error_upper = abs_error_upper
-        self.len_memory = 0
+        self.epsilon = epsilon                  # Ensure that all probabilities are non-zero
+        self.alpha = alpha                      # Tradeoff between prioritized and random exp replay
+        self.beta = beta                        # Initial value of importance-sampling, increasing to 1
+        self.beta_increment = beta_increment    # Increment value for importance-sampling
+        self.abs_error_upper = abs_error_upper  # Clip TD errors to abs_error_upper to avoid huge updates
+        self.len_memory = 0                     # Length of the exp replay memory
+    
+    def __len__(self):
+        return self.len_memory
 
     def append(self, transition):
         max_priority = np.max(self.tree[-self.capacity:])  # max among leaf nodes
@@ -125,6 +128,3 @@ class PrioritizedExperienceMemory(SumTree):
         transition_probs = np.power(clipped_errors, self.alpha)
         for ti, p in zip(tree_idx, transition_probs):
             self.update(ti, p)
-
-    def __len__(self):
-        return self.len_memory
