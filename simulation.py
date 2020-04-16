@@ -1,22 +1,29 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import gym
 import time
 import sys
 import numpy as np
 from tqdm import tqdm
 from collections import deque
-import random
-import learning
+from utils import agent_dql
+from utils import agent_pg
 import matplotlib.pyplot as plt
 
 
 class Simulation():
 
-    def __init__(self, name_of_environment='CartPole-v0', nb_stacked_frame=1, agent_params={}):
+    def __init__(self, name_of_environment='CartPole-v0', nb_stacked_frame=1):
         assert(nb_stacked_frame >= 1)
         # Main attributes of the Simulation
         self.env = gym.make(name_of_environment)   # We make the env
         self.nb_stacked_frame = nb_stacked_frame   # The number of frame observed we want to stack for the available state
-        self.agent = learning.Agent(self.reset_env().shape, self.env.action_space.n, **agent_params)  # We create an intelligent agent
+        self.state_space_shape = self.reset_env().shape
+        self.action_space_size = self.env.action_space.n
+        self.agent = None
+
+    def set_agent(self, agent):
+        self.agent = agent
 
     def reset_env(self):
         """
@@ -52,6 +59,8 @@ class Simulation():
         self.env.close()
 
     def train(self, target_score, max_episodes=1000, process_average_over=100, test_every=50, test_on=0):
+        if self.agent is None:
+            raise Exception('You need to set an actor before training it !')
         print('\n%s\n' % ('Training'.center(100, '-')))
         # Here we train our neural network with the given method
         training_score = np.empty((max_episodes,))
@@ -63,24 +72,25 @@ class Simulation():
             state = self.reset_env()  # We get x0
             episode_reward = 0
             done = False
-            visualize = (ep + 1) % test_every < test_on
+            visualize = ep > test_on and (ep + 1) % test_every < test_on
             # While the game is not finished
             while not done:
-                action = self.agent.take_action(state, train=True)  # we sample the action
+                action = self.agent.predict_action(state)  # we sample the action
                 obs, reward, done, _ = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
                 if visualize:
-                    # If vizualise is greater than 0, we vizualize the environment
+                    # If its test time, we vizualize the environment
                     self.env.render()
                 episode_reward += reward
                 next_state = self.get_next_state(state, obs)
-                self.agent.learn_during_ep(state, action, reward, next_state, done)
+                self.agent.remember(state, action, reward, next_state, done)
+                self.agent.learn_off_policy()
                 state = next_state
-            self.agent.learn_end_ep()
+            self.agent.learn_on_policy()
             total_rewards.append(episode_reward)
             rolling_mean_score = np.mean(total_rewards)
             training_score[ep] = episode_reward
             training_rolling_average[ep] = rolling_mean_score
-            self.agent.print_verbose(ep, max_episodes, episode_reward, rolling_mean_score)
+            self.agent.print_verbose(ep + 1, max_episodes, episode_reward, rolling_mean_score)
             self.env.close()
             ep += 1
         print('\n%s\n' % ('Training Done'.center(100, '-')))
@@ -98,37 +108,53 @@ class Simulation():
 
 
 if __name__ == "__main__":
-    method = 'DQN'                # 'PGN' for policy gradient, 'DQN' Deep Q-Learning
-    variation = ['DoubleDQN', 'PER']            # Set to None for original method, otherwise 'A2C'/'PPO' for 'PGN, 'DoubleDQN'/'DuelingDDQN' for 'DQN'
-    parameters_dqn = {
-        'eps_start': 1.0,
-        'eps_end': 0.1,
-        'eps_decay_steps': 5000,
-        'replay_memory_size': 50000,
-        'update_target_estimator_every': 100,
-        'batch_size': 64,
-        'alpha_PER': 0.6,  # from paper, for Double DQN
-        'beta_PER': 0.4,  # from paper, for Double DQN
-        'beta_increment_PER': 0.0001,
-        'epsilon_PER': 0.001
-    }
-    parameters_pgn = {
-        'temperature': 0.001,
-        'epsilon_ppo': 0.2,
-    }
-    method_parameters = parameters_pgn if method == 'PGN' else parameters_dqn
-    agent_params = {
-        'method': method,
-        'variation': variation,
-        'method_specific_parameters': method_parameters,  # A fictionnary of parameters proper to the method
-        'gamma': 0.99,                                    # The discounting factor
-        'lr1': 1e-3,                                      # A first learning rate
-        'lr2': 1e-3,                                      # A second learning rate (equal to the first one if None)
-        'hidden_conv_layers': [],                   # A list of parameters ((nb of filters, size of filter, strides)) for each hidden convolutionnal layer
-        'hidden_dense_layers': [64, 32],                      # A list of parameters (nb of neurons) for each hidden dense layer
-        'verbose': True
-    }
     # We create a Simulation object
-    sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1, agent_params=agent_params)
-    # We train the neural network
-    sim.train(target_score=195, max_episodes=1000, process_average_over=100, test_every=50, test_on=5)
+    sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
+    # We create an Agent to evolve in the simulation
+    agent = agent_pg.AgentPG(
+        sim.state_space_shape,
+        sim.action_space_size,
+        gamma=0.99,
+        hidden_conv_layers=[],
+        hidden_dense_layers=[32],
+        verbose=True,
+        lr_actor=1e-2,
+        lr_critic=1e-2,
+        temperature=1e-3,
+        ppo_dict={
+            'used': True,
+            'epsilon': 0.2
+        }
+    )
+    # agent = agent_dql.AgentDQL(
+    #     sim.state_space_shape,             # The shape of the state space
+    #     sim.action_space_size,             # The size of the action space
+    #     gamma=0.99,                        # The discounting factor
+    #     hidden_conv_layers=[],             # A list of parameters of for each hidden convolutionnal layer
+    #     hidden_dense_layers=[32],          # A list of parameters of for each hidden dense layer
+    #     verbose=True,                     # A live status of the training
+    #     lr=1e-2,                           # The learning rate
+    #     max_memory_size=2000,              # The maximum size of the replay memory
+    #     epsilon_behavior=(1, 0.1, 100),    # The decay followed by epsilon
+    #     batch_size=32,                     # The batch size used during the training
+    #     double_dict={
+    #         'used': True,                  # Whether we use double q learning or not
+    #         'update_targest_every': 50     # Update the TD targets q-values every update_targest_every optimization steps
+    #     },
+    #     dueling_dict={
+    #         'used': True,                  # Whether we use dueling q learning or not
+    #     },
+    #     per_dict={
+    #         'used': False,                 # Whether we use prioritized experience replay or not
+    #         'alpha': 0.6,                  #
+    #         'beta': 0.4,                   #
+    #         'beta_increment': 0.001,       #
+    #         'epsilon': 0.001               #
+    #     }
+    # )
+    # We build the neural network
+    agent.build_network()
+    # We set this agent in the simulation
+    sim.set_agent(agent)
+    # We train the agent
+    sim.train(target_score=150, max_episodes=1000, process_average_over=100, test_every=50, test_on=0)
