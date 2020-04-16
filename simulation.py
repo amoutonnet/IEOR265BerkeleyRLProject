@@ -58,7 +58,7 @@ class Simulation():
         time.sleep(2)
         self.env.close()
 
-    def train(self, target_score, max_episodes=1000, process_average_over=100, test_every=50, test_on=0):
+    def train(self, target_score, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=False):
         if self.agent is None:
             raise Exception('You need to set an actor before training it !')
         print('\n%s\n' % ('Training'.center(100, '-')))
@@ -105,56 +105,61 @@ class Simulation():
         plt.ylabel('Score')
         plt.legend()
         plt.show()
+        if save_training_data:
+            pass
 
 
 if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    # agent = agent_pg.AgentPG(
-    #     sim.state_space_shape,
-    #     sim.action_space_size,
-    #     gamma=0.99,
-    #     hidden_conv_layers=[],
-    #     hidden_dense_layers=[32],
-    #     verbose=True,
-    #     lr_actor=1e-2,
-    #     lr_critic=1e-2,
-    #     temperature=1e-3,
-    #     ppo_dict={
-    #         'used': True,
-    #         'epsilon': 0.2
-    #     }
-    # )
-    agent = agent_dql.AgentDQL(
-        sim.state_space_shape,             # The shape of the state space
-        sim.action_space_size,             # The size of the action space
-        gamma=0.99,                        # The discounting factor
-        hidden_conv_layers=[],             # A list of parameters of for each hidden convolutionnal layer
-        hidden_dense_layers=[32],          # A list of parameters of for each hidden dense layer
-        verbose=True,                     # A live status of the training
-        lr=1e-2,                           # The learning rate
-        max_memory_size=2000,              # The maximum size of the replay memory
-        epsilon_behavior=(1, 0.1, 100),    # The decay followed by epsilon
-        batch_size=32,                     # The batch size used during the training
-        double_dict={
-            'used': True,                  # Whether we use double q learning or not
-            'update_targest_every': 50     # Update the TD targets q-values every update_targest_every optimization steps
-        },
-        dueling_dict={
-            'used': True,                  # Whether we use dueling q learning or not
-        },
-        per_dict={
-            'used': True,                 # Whether we use prioritized experience replay or not
-            'alpha': 0.6,                  #
-            'beta': 0.4,                   #
-            'beta_increment': 0.001,       #
-            'epsilon': 0.001               #
-        }
-    )
+    method = 'DQL'
+    if method == 'PG':
+        agent = agent_pg.AgentPG(
+            sim.state_space_shape,              # The size of the spate space
+            sim.action_space_size,              # The size of the action space
+            gamma=0.99,                         # The discounting factor
+            hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer
+            hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
+            verbose=True,                       # A live status of the training
+            lr_actor=1e-2,                      # Learning rate
+            lr_critic=1e-2,                     # Learning rate for A2C critic part
+            temperature=1e-3,                   #
+            ppo_dict={
+                'used': True,                   # Whether or not Proximal policy optimization is used
+                'epsilon': 0.2                  #
+            }
+        )
+    else:
+        agent = agent_dql.AgentDQL(
+            sim.state_space_shape,              # The shape of the state space
+            sim.action_space_size,              # The size of the action space
+            gamma=0.99,                         # The discounting factor
+            hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer
+            hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
+            verbose=True,                       # A live status of the training
+            lr=1e-2,                            # The learning rate
+            max_memory_size=40000,              # The maximum size of the replay memory
+            epsilon_behavior=(1, 0.1, 5000),    # The decay followed by epsilon
+            batch_size=64,                      # The batch size used during the training
+            double_dict={
+                'used': True,                   # Whether we use double q learning or not
+                'update_target_every': 200      # Update the TD targets q-values every update_target_every optimization steps
+            },
+            dueling_dict={
+                'used': True,                  # Whether we use dueling q learning or not
+            },
+            per_dict={
+                'used': True,                   # Whether we use prioritized experience replay or not
+                'alpha': 0.6,                   # Prioritization intensity
+                'beta': 0.4,                    # Initial parameter for Importance Sampling
+                'beta_increment': 0.0001,        # Increment per sampling for Importance Sampling
+                'epsilon': 0.01                # Value assigned to have non-zero probailities
+            }
+        )
     # We build the neural network
     agent.build_network()
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent
-    sim.train(target_score=150, max_episodes=1000, process_average_over=100, test_every=50, test_on=0)
+    sim.train(target_score=190, max_episodes=1000, process_average_over=100, test_every=50, test_on=5, save_training_data=True)
