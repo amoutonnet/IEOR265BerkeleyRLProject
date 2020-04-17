@@ -3,6 +3,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import gym
 import time
 import sys
+import random
 import numpy as np
 from tqdm import tqdm
 from collections import deque
@@ -10,7 +11,13 @@ from utils import agent_dql
 from utils import agent_pg
 import matplotlib.pyplot as plt
 import tensorflow.keras.initializers as initializers
+from tensorflow import random as tf_random
 from time import time
+import pandas as pd
+
+random.seed(1)
+np.random.seed(1)
+tf_random.set_seed()
 
 
 class Simulation():
@@ -119,21 +126,19 @@ class Simulation():
 
     def save_training_data(self, target_score, training_score, training_rolling_average, timestamps):
         """
-        Saving training data in npz archive
+        Saving training data to csv file
         """
         agent_type = self.agent.__class__.__name__
         if agent_type == 'AgentPG':
-            archive_name = '{} target {} entropy {} ppo {} lambd {}'.format(
+            archive_name = '{} target {} entropy {} ppo {} lambd {} .csv'.format(
                 agent_type,
                 target_score,
                 self.agent.temperature,
                 self.agent.epsilon,
                 self.agent.lambd
             )
-            print(archive_name)
         else:
-            pass
-            archive_name = '{} target {} double {} dueling {} per {} epssteps {} memorysize {}'.format(
+            archive_name = '{} target {} double {} dueling {} per {} epssteps {} memorysize {} .csv'.format(
                 agent_type,
                 target_score,
                 self.agent.update_target_every,
@@ -142,8 +147,9 @@ class Simulation():
                 len(self.agent.epsilons),
                 self.agent.max_memroy_size
             )
-        np.savez_compressed(archive_name, scores=training_score, rolling_average=training_rolling_average, timestamps=timestamps)
-
+        data = np.stack((timestamps, training_score, training_rolling_average)).reshape(-1, 3)
+        columns = ['timestamps', 'training_score', 'training_rolling_average']
+        pd.DataFrame(data=data, columns=columns).to_csv("/savedtrainingdata/" + archive_name, sep=';')
 
 
 if __name__ == "__main__":
