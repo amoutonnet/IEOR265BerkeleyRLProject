@@ -12,12 +12,11 @@ from utils import agent_pg
 import matplotlib.pyplot as plt
 import tensorflow.keras.initializers as initializers
 from tensorflow import random as tf_random
-from time import time
 import pandas as pd
 
 random.seed(1)
 np.random.seed(1)
-tf_random.set_seed()
+tf_random.set_seed(1)
 
 
 class Simulation():
@@ -77,7 +76,7 @@ class Simulation():
         total_rewards = deque(maxlen=process_average_over)  # We initialize the total reward list
         rolling_mean_score = 0
         timestamps = np.empty((max_episodes))
-        start_date = time()
+        start_date = time.time()
         ep = 0
         while rolling_mean_score < target_score and ep < max_episodes:
             state = self.reset_env()  # We get x0
@@ -101,7 +100,7 @@ class Simulation():
             rolling_mean_score = np.mean(total_rewards)
             training_score[ep] = episode_reward
             training_rolling_average[ep] = rolling_mean_score
-            timestamps[ep] = time() - start_date
+            timestamps[ep] = time.time() - start_date
             self.agent.print_verbose(ep + 1, max_episodes, episode_reward, rolling_mean_score)
             self.env.close()
             ep += 1
@@ -142,21 +141,22 @@ class Simulation():
                 agent_type,
                 target_score,
                 self.agent.update_target_every,
-                self.agent.usedueling,
-                self.agent.useper,
+                self.agent.use_dueling,
+                self.agent.use_per,
                 len(self.agent.epsilons),
-                self.agent.max_memroy_size
+                self.agent.max_memory_size
             )
         data = np.stack((timestamps, training_score, training_rolling_average)).reshape(-1, 3)
         columns = ['timestamps', 'training_score', 'training_rolling_average']
         pd.DataFrame(data=data, columns=columns).to_csv(archive_name, sep=';')
+        print('\n\n%s\n' % ('Training Data Saved'.center(100, '-')))
 
 
 if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    method = 'PG'
+    method = 'DQN'
     if method == 'PG':
         agent = agent_pg.AgentPG(
             sim.state_space_shape,              # The size of the spate space
@@ -185,7 +185,7 @@ if __name__ == "__main__":
             gamma=0.99,                         # The discounting factor
             hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer
             hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
-            initializer='random_normal',        # Initializer to use for weights
+            initializer='he_normal',            # Initializer to use for weights
             verbose=True,                       # A live status of the training
             lr=1e-2,                            # The learning rate
             max_memory_size=40000,              # The maximum size of the replay memory
@@ -196,10 +196,10 @@ if __name__ == "__main__":
                 'update_target_every': 200      # Update the TD targets q-values every update_target_every optimization steps
             },
             dueling_dict={
-                'used': False,                  # Whether we use dueling q learning or not
+                'used': True,                  # Whether we use dueling q learning or not
             },
             per_dict={
-                'used': True,                   # Whether we use prioritized experience replay or not
+                'used': False,                   # Whether we use prioritized experience replay or not
                 'alpha': 0.6,                   # Prioritization intensity
                 'beta': 0.4,                    # Initial parameter for Importance Sampling
                 'beta_increment': 0.0001,        # Increment per sampling for Importance Sampling
@@ -211,4 +211,4 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent
-    sim.train(target_score=150, max_episodes=100, process_average_over=100, test_every=50, test_on=0, save_training_data=True)
+    sim.train(target_score=150, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=True)
