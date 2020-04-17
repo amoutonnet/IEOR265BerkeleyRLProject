@@ -149,7 +149,7 @@ class Simulation():
             )
         data = np.stack((timestamps, training_score, training_rolling_average)).reshape(-1, 3)
         columns = ['timestamps', 'training_score', 'training_rolling_average']
-        pd.DataFrame(data=data, columns=columns).to_csv("/savedtrainingdata/" + archive_name, sep=';')
+        pd.DataFrame(data=data, columns=columns).to_csv(archive_name, sep=';')
 
 
 if __name__ == "__main__":
