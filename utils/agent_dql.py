@@ -103,6 +103,8 @@ class AgentDQL(AgentDQLBase):
         self.use_per = per_dict.pop('used')
         if self.use_double:
             self.update_target_every = double_dict['update_target_every']
+        else:
+            self.update_target_every = None
         if self.use_per:
             self.memory = per_utils.PrioritizedExperienceMemory(
                 self.max_memory_size,

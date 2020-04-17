@@ -10,6 +10,7 @@ from utils import agent_dql
 from utils import agent_pg
 import matplotlib.pyplot as plt
 import tensorflow.keras.initializers as initializers
+from time import time
 
 
 class Simulation():
@@ -68,6 +69,8 @@ class Simulation():
         training_rolling_average = np.empty((max_episodes,))
         total_rewards = deque(maxlen=process_average_over)  # We initialize the total reward list
         rolling_mean_score = 0
+        timestamps = np.empty((max_episodes))
+        start_date = time()
         ep = 0
         while rolling_mean_score < target_score and ep < max_episodes:
             state = self.reset_env()  # We get x0
@@ -91,23 +94,56 @@ class Simulation():
             rolling_mean_score = np.mean(total_rewards)
             training_score[ep] = episode_reward
             training_rolling_average[ep] = rolling_mean_score
+            timestamps[ep] = time() - start_date
             self.agent.print_verbose(ep + 1, max_episodes, episode_reward, rolling_mean_score)
             self.env.close()
             ep += 1
         print('\n\n%s\n' % ('Training Done'.center(100, '-')))
         training_score = training_score[:ep]
         training_rolling_average = training_rolling_average[:ep]
-        plt.figure()
-        plt.plot(training_score, 'b', linewidth=1, label='Score')
-        plt.plot(training_rolling_average, 'orange', linewidth=1, label='Rolling Average')
-        plt.plot([target_score] * ep, 'r', linewidth=1, label='Target Score')
-        plt.title('Evolution of the score during the Training {}'.format(target_score))
-        plt.xlabel('Episodes')
-        plt.ylabel('Score')
-        plt.legend()
+        timestamps = timestamps[:ep]
+        fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+        ax1.plot(training_score, 'b', linewidth=1, label='Score')
+        ax1.plot(training_rolling_average, 'orange', linewidth=1, label='Rolling Average')
+        ax1.plot([target_score] * ep, 'r', linewidth=1, label='Target Score')
+        ax1.set(xlabel='Episodes', ylabel='Score')
+        ax2.plot(timestamps, training_score, 'b', linewidth=1)
+        ax2.plot(timestamps, training_rolling_average, 'orange', linewidth=1)
+        ax2.plot(timestamps, [target_score] * ep, 'r', linewidth=1)
+        ax2.set(xlabel='Time (s)', ylabel='Score')
+        fig.suptitle('Evolution of the score during the Training {}'.format(target_score))
+        fig.legend()
         plt.show()
         if save_training_data:
+            self.save_training_data(target_score, training_score, training_rolling_average, timestamps)
+
+    def save_training_data(self, target_score, training_score, training_rolling_average, timestamps):
+        """
+        Saving training data in npz archive
+        """
+        agent_type = self.agent.__class__.__name__
+        if agent_type == 'AgentPG':
+            archive_name = '{} target {} entropy {} ppo {} lambd {}'.format(
+                agent_type,
+                target_score,
+                self.agent.temperature,
+                self.agent.epsilon,
+                self.agent.lambd
+            )
+            print(archive_name)
+        else:
             pass
+            archive_name = '{} target {} double {} dueling {} per {} epssteps {} memorysize {}'.format(
+                agent_type,
+                target_score,
+                self.agent.update_target_every,
+                self.agent.usedueling,
+                self.agent.useper,
+                len(self.agent.epsilons),
+                self.agent.max_memroy_size
+            )
+        np.savez_compressed(archive_name, scores=training_score, rolling_average=training_rolling_average, timestamps=timestamps)
+
 
 
 if __name__ == "__main__":
@@ -128,7 +164,7 @@ if __name__ == "__main__":
             lr_critic=1e-2,                     # Learning rate for A2C critic part
             lambd=0.5,                          # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
             entropy_dict={
-                'used': True,                   # Whether or not Entropy Regulaarization is used
+                'used': False,                   # Whether or not Entropy Regulaarization is used
                 'temperature': 1e-3             # Temperature parameter for entropy reg
             },
             ppo_dict={
@@ -154,7 +190,7 @@ if __name__ == "__main__":
                 'update_target_every': 200      # Update the TD targets q-values every update_target_every optimization steps
             },
             dueling_dict={
-                'used': True,                  # Whether we use dueling q learning or not
+                'used': False,                  # Whether we use dueling q learning or not
             },
             per_dict={
                 'used': True,                   # Whether we use prioritized experience replay or not
@@ -169,4 +205,4 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent
-    sim.train(target_score=150, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=True)
+    sim.train(target_score=150, max_episodes=100, process_average_over=100, test_every=50, test_on=0, save_training_data=True)

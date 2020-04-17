@@ -152,6 +152,8 @@ class AgentPG(AgentPGBase):
         self.use_ppo = ppo_dict.pop('used')
         if self.use_ppo:
             self.epsilon = ppo_dict['epsilon']
+        else:
+            self.epsilon = None
         self.use_entropy_reg = entropy_dict.pop('used')
         if self.use_entropy_reg:
             self.temperature = entropy_dict['temperature']
