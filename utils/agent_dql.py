@@ -15,7 +15,7 @@ class AgentDQLBase(agent.Agent):
                  gamma=0.99,                      # The discounting factor
                  hidden_conv_layers=[],           # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],        # A list of parameters of for each hidden dense layer
-                 initializer=tf.keras.initializers.RandomNormal(),
+                 initializer='random_normal',
                  verbose=False,                   # A live status of the training
                  lr=1e-2,                         # The learning rate
                  max_memory_size=2000,            # The maximum size of the replay memory
@@ -65,7 +65,7 @@ class AgentDQL(AgentDQLBase):
                  gamma=0.99,                        # The discounting factor
                  hidden_conv_layers=[],             # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],          # A list of parameters of for each hidden dense layer
-                 initializer=tf.keras.initializers.RandomNormal(),
+                 initializer='random_normal',
                  verbose=False,                     # A live status of the training
                  lr=1e-2,                           # The learning rate
                  max_memory_size=2000,              # The maximum size of the replay memory

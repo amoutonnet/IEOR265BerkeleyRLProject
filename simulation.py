@@ -9,7 +9,7 @@ from collections import deque
 from utils import agent_dql
 from utils import agent_pg
 import matplotlib.pyplot as plt
-import tensorflow.keras.initializers as tfinitializers
+import tensorflow.keras.initializers as initializers
 
 
 class Simulation():
@@ -94,7 +94,7 @@ class Simulation():
             self.agent.print_verbose(ep + 1, max_episodes, episode_reward, rolling_mean_score)
             self.env.close()
             ep += 1
-        print('\n%s\n' % ('Training Done'.center(100, '-')))
+        print('\n\n%s\n' % ('Training Done'.center(100, '-')))
         training_score = training_score[:ep]
         training_rolling_average = training_rolling_average[:ep]
         plt.figure()
@@ -122,14 +122,18 @@ if __name__ == "__main__":
             gamma=0.99,                         # The discounting factor
             hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer
             hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
-            initializer=tfinitializers.RandomNormal(),
+            initializer='random_normal',        # Initializer to use for weights
             verbose=True,                       # A live status of the training
             lr_actor=1e-2,                      # Learning rate
             lr_critic=1e-2,                     # Learning rate for A2C critic part
-            temperature=1e-3,                   #
+            lambd=0.5,                          # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
+            entropy_dict={
+                'used': True,                   # Whether or not Entropy Regulaarization is used
+                'temperature': 1e-3             # Temperature parameter for entropy reg
+            },
             ppo_dict={
-                'used': True,                   # Whether or not Proximal policy optimization is used
-                'epsilon': 0.2                  #
+                'used': False,                  # Whether or not Proximal policy optimization is used
+                'epsilon': 0.2                  # Epsilon for PPO
             }
         )
     else:
@@ -139,7 +143,7 @@ if __name__ == "__main__":
             gamma=0.99,                         # The discounting factor
             hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer
             hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
-            initializer=tfinitializers.RandomNormal(),
+            initializer='random_normal',        # Initializer to use for weights
             verbose=True,                       # A live status of the training
             lr=1e-2,                            # The learning rate
             max_memory_size=40000,              # The maximum size of the replay memory
@@ -165,4 +169,4 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent
-    sim.train(target_score=190, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=True)
+    sim.train(target_score=150, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=True)

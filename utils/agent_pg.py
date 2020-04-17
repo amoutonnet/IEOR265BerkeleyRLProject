@@ -2,7 +2,10 @@ from . import agent
 from collections import deque
 import tensorflow as tf
 import tensorflow.keras.backend as K
+import itertools
+import functools
 import numpy as np
+import sys
 
 DELTA = agent.DELTA
 
@@ -15,10 +18,10 @@ class AgentPGBase(agent.Agent):
                  hidden_conv_layers=[],          # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],       # A list of parameters of for each hidden dense layer
                  verbose=False,                  # A live status of the training
-                 initializer=tf.keras.initializers.RandomNormal(),
+                 initializer='random_normal',
                  lr_actor=1e-2,                  # A first learning rate
                  lr_critic=1e-2,                 # A second learning rate
-                 temperature=1e-3                # The temperature parameter for entropy
+                 lambd=1,                        # General Advantage Estimate term
                  ):
         super().__init__(
             state_space_shape=state_space_shape,
@@ -29,11 +32,12 @@ class AgentPGBase(agent.Agent):
             initializer=initializer,
             verbose=verbose
         )
+        assert(lambd >= 0 and lambd <= 1)
         self.optimizer_actor = tf.keras.optimizers.Adam(lr_actor)
         self.optimizer_critic = tf.keras.optimizers.Adam(lr_critic)
         self.loss_actor = -float('inf')
         self.loss_critic = float('inf')
-        self.temperature = temperature
+        self.lambd = lambd
         self.memory = list()
         self.main_name = 'pg'
 
@@ -87,7 +91,14 @@ class AgentPGBase(agent.Agent):
         return action
 
     def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))   # We remember the current flow of state/action/reward/next_state/done
+        self.memory.append((state, action, reward))   # We remember the current flow of state/action/reward/next_state/done
+
+    def get_advantages(self, critic_values, rewards):
+        values = np.empty((len(rewards),))
+        for i in range(len(rewards) - 1):
+            values[i] = rewards[i] + self.gamma * critic_values[i + 1] - critic_values[i]
+        values[-1] = rewards[-1] - critic_values[-1]
+        return np.array(list(itertools.accumulate(values[::-1], lambda x, y: x * (self.gamma * self.lambd) + y))[::-1], dtype=np.float32)
 
     def print_verbose(self, ep, total_episodes, episode_reward, rolling_score):
         if self.verbose:
@@ -114,10 +125,14 @@ class AgentPG(AgentPGBase):
                  hidden_conv_layers=[],          # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],       # A list of parameters of for each hidden dense layer
                  verbose=False,                  # A live status of the training
-                 initializer=tf.keras.initializers.RandomNormal(),
+                 initializer='random_normal',
                  lr_actor=1e-2,                  # A first learning rate
                  lr_critic=1e-2,                 # A second learning rate
-                 temperature=1e-3,               # The temperature parameter for entropy
+                 lambd=1,                        # General Advantage Estimate term
+                 entropy_dict={
+                     'used': False,              # Whether or not Entropy Regulaarization is used
+                     'temperature': 1e-3         # Temperature parameter for entropy reg
+                 },
                  ppo_dict={
                      'used': False,              # Whether we use PPO or not
                      'epsilon': 0.2              # Epsilon for PPO
@@ -132,11 +147,16 @@ class AgentPG(AgentPGBase):
             verbose=verbose,
             lr_actor=lr_actor,
             lr_critic=lr_critic,
-            temperature=temperature
+            lambd=lambd
         )
         self.use_ppo = ppo_dict.pop('used')
         if self.use_ppo:
             self.epsilon = ppo_dict['epsilon']
+        self.use_entropy_reg = entropy_dict.pop('used')
+        if self.use_entropy_reg:
+            self.temperature = entropy_dict['temperature']
+        else:
+            self.temperature = 0
 
     def build_network(self):
         advantages = super().build_network()
@@ -147,8 +167,8 @@ class AgentPG(AgentPGBase):
                 # Here we define a custom loss for A2C policy gradient
                 out = K.clip(y_pred, DELTA, 1)  # We need to clip y_pred as it may be equal to zero (otherwise problem with log afterwards)
                 log_lik = K.sum(y_true * K.log(out), axis=1)  # We get the log likelyhood associated to the predictions
-                advantages_with_entropy = advantages - self.temperature * K.stop_gradient(log_lik)
-                return -K.mean(log_lik * advantages_with_entropy, keepdims=True)  # We multiply it by the advantage (future reward here)
+                advantages_with_entropy = advantages - self.temperature * K.stop_gradient(K.sum(log_lik, axis=-1))
+                return -K.sum(log_lik * advantages_with_entropy, keepdims=True)  # We multiply it by the advantage (future reward here)
         else:
             # Loss for PPO
             def actor_loss(y_true, y_pred):
@@ -156,29 +176,30 @@ class AgentPG(AgentPGBase):
                 out = K.clip(y_pred, DELTA, 1)
                 log_lik = y_true * K.log(out)
                 old_log_lik = K.stop_gradient(log_lik)
-                advantages_with_entropy = advantages - K.sum(self.temperature * old_log_lik, axis=-1)
+                advantages_with_entropy = advantages - self.temperature * K.sum(old_log_lik, axis=-1)
                 ratio = K.sum(K.exp(log_lik - old_log_lik), axis=1)
                 clipped_ratio = K.clip(ratio, 1 - self.epsilon, 1 + self.epsilon)
-                return -K.mean(K.minimum(ratio * advantages_with_entropy, clipped_ratio * advantages_with_entropy), keepdims=True)
+                return -K.sum(K.minimum(ratio * advantages_with_entropy, clipped_ratio * advantages_with_entropy), keepdims=True)
 
         self.actor.compile(loss=actor_loss, optimizer=self.optimizer_actor, experimental_run_tf_function=False)
 
     def learn_on_policy(self):
         # We retrieve all states, actions and reward the agent got during the episode from the memory
-        states, actions, rewards, next_states, dones = map(np.array, zip(*self.memory))
+        states, actions, rewards = map(np.array, zip(*self.memory))
         # We one hot encode the taken actions
         one_hot_encoded_actions = np.zeros((len(actions), self.action_space_size))
         one_hot_encoded_actions[np.arange(len(actions)), actions.astype(int)] = 1
         # We process the states values with the critic network
-        critic_values = self.critic(states).numpy()
-        critic_next_values = self.critic(next_states).numpy()
+        critic_values = np.squeeze(self.critic(states).numpy())
         # We get the target reward
-        targets = rewards + self.gamma * np.squeeze(critic_next_values) * np.invert(dones)
-        # We get the advantage (difference between the discounted reward and the baseline)
-        advantages = targets - np.squeeze(critic_values)
+        advantages = self.get_advantages(critic_values, rewards)
         # We normalize advantages
         advantages = self.normalize(advantages)
-        # We train the two networks
+        # We train the actor network
         self.loss_actor = self.actor.train_on_batch([states, advantages], one_hot_encoded_actions)
-        self.loss_critic = self.critic.train_on_batch(states, targets)
+        # We get the discounted rewards
+        discounted_rewards = np.array(list(itertools.accumulate(rewards[::-1], lambda x, y: x * self.gamma + y))[::-1], dtype=np.float32)
+        # We train the critic network
+        self.loss_critic = self.critic.train_on_batch(states, discounted_rewards)
+        # We clear the memory
         self.memory.clear()

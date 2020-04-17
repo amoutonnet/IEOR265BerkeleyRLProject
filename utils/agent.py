@@ -11,7 +11,7 @@ class Agent():
                  gamma=0.99,                     # The discounting factor
                  hidden_conv_layers=[],          # A list of parameters of for each hidden convolutionnal layer
                  hidden_dense_layers=[32],       # A list of parameters of for each hidden dense layer
-                 initializer=tf.keras.initializers.RandomNormal(),      
+                 initializer='random_normal',
                  verbose=False                   # A live status of the training
                  ):
         self.state_space_shape = state_space_shape
@@ -30,7 +30,7 @@ class Agent():
             for id_, c in enumerate(self.hidden_conv_layers):
                 x = tf.keras.layers.Conv1D(filters=c[0],
                                            kernel_size=c[1],
-                                           strides = c[2],
+                                           strides=c[2],
                                            padding='same',
                                            activation='relu',
                                            kernel_initializer=self.initializer,
