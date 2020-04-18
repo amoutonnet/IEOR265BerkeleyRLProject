@@ -166,9 +166,8 @@ class AgentDQL(AgentDQLBase):
         # The QNetwork
         self.q_network = tf.keras.Model(inputs=states, outputs=q_values, name='Q-Network')
 
-        if self.use_double:
-            # Copy of the network for target calculation, updated every self.update_target_estimator_every
-            self.target_model = tf.keras.models.clone_model(self.q_network)
+        # Copy of the network for target calculation, updated every self.update_target_estimator_every
+        self.target_model = tf.keras.models.clone_model(self.q_network)
 
         if self.verbose:
             print('\n%s\n' % ('Neural Networks'.center(100, '-')))
@@ -184,12 +183,20 @@ class AgentDQL(AgentDQLBase):
             action = np.argmax(self.q_network(state)[0])  # otherwise, choose the action with the best predicted reward starting next step
         return action
 
-    def get_next_values(self, next_states_batch):
-        q_next_values = self.q_network(next_states_batch).numpy()
-        return np.amax(q_next_values, axis=1)
+    def get_next_q_values(self, next_states_batch):
+        if self.use_double:
+            # Find the best action as defined by q_network
+            best_next_actions = np.argmax(self.q_network(next_states_batch).numpy(), axis = 1)
+            # Compute the Q-value associatde with best actions thanks to the target network
+            q_values_next = tf.math.reduce_sum(
+                self.target_model(next_states_batch) * tf.one_hot(best_next_actions, self.action_space_size), axis=1)
+        else:
+            # If Double Q-learning is not used, then just choose the action maximizing the target network output
+            q_values_next = np.amax(self.target_model(next_states_batch).numpy(), axis=1)
+        return q_values_next
 
     def learn_off_policy(self):
-        if self.use_double and (self.opti_step + 1) % self.update_target_every == 0:
+        if (self.opti_step + 1) % self.update_target_every == 0:
             self.target_model.set_weights(self.q_network.get_weights())
         if len(self.memory) >= self.batch_size:
             if self.use_per:
@@ -197,7 +204,7 @@ class AgentDQL(AgentDQLBase):
             else:
                 mini_batch = random.sample(self.memory, self.batch_size)
             states_batch, action_batch, rewards_batch, next_states_batch, done_batch = map(np.array, zip(*mini_batch))
-            next_values = self.get_next_values(next_states_batch)
+            next_values = self.get_next_q_values(next_states_batch)
             actual_values = np.where(done_batch, rewards_batch, rewards_batch + self.gamma * next_values)
             # Gradient Descent Update
             with tf.GradientTape() as tape:

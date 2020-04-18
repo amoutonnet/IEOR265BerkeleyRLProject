@@ -183,26 +183,26 @@ if __name__ == "__main__":
             sim.state_space_shape,              # The shape of the state space
             sim.action_space_size,              # The size of the action space
             gamma=0.99,                         # The discounting factor
-            hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer
+            hidden_conv_layers=[[32, 8, 4], [64, 4, 2], [64, 3, 1]],              # A list of parameters of for each hidden convolutionnal layer
             hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
             initializer='he_normal',            # Initializer to use for weights
             verbose=True,                       # A live status of the training
             lr=1e-2,                            # The learning rate
-            max_memory_size=40000,              # The maximum size of the replay memory
-            epsilon_behavior=(1, 0.1, 5000),    # The decay followed by epsilon
-            batch_size=64,                      # The batch size used during the training
+            max_memory_size=25000,              # The maximum size of the replay memory
+            epsilon_behavior=(1, 0.1, 2000),    # The decay followed by epsilon
+            batch_size=32,                      # The batch size used during the training
             double_dict={
                 'used': True,                   # Whether we use double q learning or not
                 'update_target_every': 200      # Update the TD targets q-values every update_target_every optimization steps
             },
             dueling_dict={
-                'used': True,                  # Whether we use dueling q learning or not
+                'used': False,                  # Whether we use dueling q learning or not
             },
             per_dict={
                 'used': False,                   # Whether we use prioritized experience replay or not
                 'alpha': 0.6,                   # Prioritization intensity
                 'beta': 0.4,                    # Initial parameter for Importance Sampling
-                'beta_increment': 0.0001,        # Increment per sampling for Importance Sampling
+                'beta_increment': 0.0002,        # Increment per sampling for Importance Sampling
                 'epsilon': 0.01                # Value assigned to have non-zero probailities
             }
         )
