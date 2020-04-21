@@ -46,10 +46,10 @@ class AgentPGBase(agent.Agent):
         states = tf.keras.Input(shape=self.state_space_shape, name='%s_states' % self.main_name)
         # Advatnages as input
         advantages = tf.keras.Input(shape=(1,), name='%s_advantages' % self.main_name)
-        # Conv layers for actor
-        x = self.create_conv_layers(states, 'actor')
+        # Conv layers for actor and critic, those are common
+        output_conv = self.create_conv_layers(states, 'common')
         # Dense layers for actor
-        x = self.create_dense_layers(x, 'actor')
+        x = self.create_dense_layers(output_conv, 'actor')
         # One dense output layer, softmax activated (to get probabilities)
         actions_probs = tf.keras.layers.Dense(units=self.action_space_size,
                                               activation='softmax',
@@ -61,10 +61,8 @@ class AgentPGBase(agent.Agent):
         # Actor model to learn
         self.actor = tf.keras.Model(inputs=[states, advantages], outputs=actions_probs, name='Actor')
 
-        # Conv layers for critic
-        x = self.create_conv_layers(states, 'critic')
         # Dense layers for critic
-        x = self.create_dense_layers(x, 'critic')
+        x = self.create_dense_layers(output_conv, 'critic')
         # One dense output layer, linear activated (to get value of state)
         values = tf.keras.layers.Dense(units=1,
                                        activation='linear',
@@ -129,6 +127,7 @@ class AgentPG(AgentPGBase):
                  lr_actor=1e-2,                  # A first learning rate
                  lr_critic=1e-2,                 # A second learning rate
                  lambd=1,                        # General Advantage Estimate term
+                 epochs=10,
                  entropy_dict={
                      'used': False,              # Whether or not Entropy Regulaarization is used
                      'temperature': 1e-3         # Temperature parameter for entropy reg
@@ -160,6 +159,8 @@ class AgentPG(AgentPGBase):
         else:
             self.temperature = 0
 
+        self.epochs = epochs
+
     def build_network(self):
         advantages = super().build_network()
 
@@ -181,7 +182,7 @@ class AgentPG(AgentPGBase):
                 advantages_with_entropy = advantages - self.temperature * K.sum(old_log_lik, axis=-1)
                 ratio = K.sum(K.exp(log_lik - old_log_lik), axis=1)
                 clipped_ratio = K.clip(ratio, 1 - self.epsilon, 1 + self.epsilon)
-                return -K.sum(K.minimum(ratio * advantages_with_entropy, clipped_ratio * advantages_with_entropy), keepdims=True)
+                return -K.mean(K.minimum(ratio * advantages_with_entropy, clipped_ratio * advantages_with_entropy), keepdims=True)
 
         self.actor.compile(loss=actor_loss, optimizer=self.optimizer_actor, experimental_run_tf_function=False)
 
@@ -198,10 +199,12 @@ class AgentPG(AgentPGBase):
         # We normalize advantages
         advantages = self.normalize(advantages)
         # We train the actor network
-        self.loss_actor = self.actor.train_on_batch([states, advantages], one_hot_encoded_actions)
+        for _ in range(self.epochs):
+            self.loss_actor = self.actor.train_on_batch([states, advantages], one_hot_encoded_actions)
         # We get the discounted rewards
         discounted_rewards = np.array(list(itertools.accumulate(rewards[::-1], lambda x, y: x * self.gamma + y))[::-1], dtype=np.float32)
         # We train the critic network
-        self.loss_critic = self.critic.train_on_batch(states, discounted_rewards)
+        for _ in range(self.epochs):
+            self.loss_critic = self.critic.train_on_batch(states, discounted_rewards)
         # We clear the memory
         self.memory.clear()

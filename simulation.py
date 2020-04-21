@@ -14,9 +14,9 @@ import tensorflow.keras.initializers as initializers
 from tensorflow import random as tf_random
 import pandas as pd
 
-random.seed(1)
-np.random.seed(1)
-tf_random.set_seed(1)
+random.seed(150)
+np.random.seed(150)
+tf_random.set_seed(150)
 
 
 class Simulation():
@@ -116,9 +116,9 @@ class Simulation():
         ax2.plot(timestamps, training_score, 'b', linewidth=1)
         ax2.plot(timestamps, training_rolling_average, 'orange', linewidth=1)
         ax2.plot(timestamps, [target_score] * ep, 'r', linewidth=1)
-        ax2.set(xlabel='Time (s)', ylabel='Score')
+        ax2.set(xlabel='Time (s)')
         fig.suptitle('Evolution of the score during the Training {}'.format(target_score))
-        fig.legend()
+        fig.legend(ncol=3, loc='upper center', bbox_to_anchor=(0.5, 0.955), prop={'size': 9})
         plt.show()
         if save_training_data:
             self.save_training_data(target_score, training_score, training_rolling_average, timestamps)
@@ -129,7 +129,7 @@ class Simulation():
         """
         agent_type = self.agent.__class__.__name__
         if agent_type == 'AgentPG':
-            archive_name = '{} target {} entropy {} ppo {} lambd {} .csv'.format(
+            archive_name = '{}_target_{}_entropy_{}_ppo_{}_lambd_{}.csv'.format(
                 agent_type,
                 target_score,
                 self.agent.temperature,
@@ -137,7 +137,7 @@ class Simulation():
                 self.agent.lambd
             )
         else:
-            archive_name = '{} target {} double {} dueling {} per {} epssteps {} memorysize {} .csv'.format(
+            archive_name = '{}_target_{}_double_{}_dueling_{}_per_{}_epssteps_{}_memorysize_{}.csv'.format(
                 agent_type,
                 target_score,
                 self.agent.update_target_every,
@@ -148,33 +148,41 @@ class Simulation():
             )
         data = np.stack((timestamps, training_score, training_rolling_average)).reshape(-1, 3)
         columns = ['timestamps', 'training_score', 'training_rolling_average']
-        pd.DataFrame(data=data, columns=columns).to_csv(archive_name, sep=';')
-        print('\n\n%s\n' % ('Training Data Saved'.center(100, '-')))
+        pd.DataFrame(data=data, columns=columns).to_csv('Results/' + archive_name, sep=';')
+        print('\n%s\n' % ('Training Data Saved'.center(100, '-')))
 
 
 if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    method = 'DQN'
+    method = 'PG'
     if method == 'PG':
         agent = agent_pg.AgentPG(
             sim.state_space_shape,              # The size of the spate space
             sim.action_space_size,              # The size of the action space
             gamma=0.99,                         # The discounting factor
-            hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer
-            hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
+            hidden_conv_layers=[                # A list of parameters of for each hidden convolutionnal layer
+                (32, 3, 1),
+                (16, 2, 1)
+            ],
+            hidden_dense_layers=[               # A list of parameters of for each hidden dense layer
+                128,
+                64,
+                32
+            ],
             initializer='random_normal',        # Initializer to use for weights
             verbose=True,                       # A live status of the training
-            lr_actor=1e-2,                      # Learning rate
-            lr_critic=1e-2,                     # Learning rate for A2C critic part
-            lambd=0.5,                          # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
+            lr_actor=1e-3,                      # Learning rate
+            lr_critic=1e-3,                     # Learning rate for A2C critic part
+            lambd=0.8,                          # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
+            epochs=1,                          # The number of time we train actor and critic on the batch of data obtained during an episode
             entropy_dict={
-                'used': False,                   # Whether or not Entropy Regulaarization is used
-                'temperature': 1e-3             # Temperature parameter for entropy reg
+                'used': True,                   # Whether or not Entropy Regulaarization is used
+                'temperature': 1e-3                # Temperature parameter for entropy reg
             },
             ppo_dict={
-                'used': False,                  # Whether or not Proximal policy optimization is used
+                'used': True,                   # Whether or not Proximal policy optimization is used
                 'epsilon': 0.2                  # Epsilon for PPO
             }
         )
@@ -211,4 +219,4 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent
-    sim.train(target_score=150, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=True)
+    sim.train(target_score=150, max_episodes=10, process_average_over=100, test_every=50, test_on=0, save_training_data=True)
