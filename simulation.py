@@ -11,7 +11,7 @@ from utils import agent_dql
 from utils import agent_pg
 import matplotlib.pyplot as plt
 import tensorflow.keras.initializers as initializers
-import tensorflow as tf
+from tensorflow import random as tf_random
 import pandas as pd
 
 random.seed(150)
@@ -137,7 +137,7 @@ class Simulation():
                 self.agent.lambd
             )
         else:
-            archive_name = '{} target {} update {} double {} dueling {} per {} epssteps {} memorysize {} .csv'.format(
+            archive_name = '{}_target_{}_update_{}_double_{}_dueling_{}_per_{}_epssteps_{}_memorysize_{}.csv'.format(
                 agent_type,
                 target_score,
                 self.agent.update_target_every,
@@ -147,7 +147,7 @@ class Simulation():
                 len(self.agent.epsilons),
                 self.agent.max_memory_size
             )
-            self.agent.q_network.save_weights('q_network' + archive_name)
+            self.agent.q_network.save_weights('Results/' + archive_name)
         data = np.stack((timestamps, training_score, training_rolling_average)).reshape(-1, 3)
         columns = ['timestamps', 'training_score', 'training_rolling_average']
         pd.DataFrame(data=data, columns=columns).to_csv('Results/' + archive_name, sep=';')
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    method = 'PG'
+    method = 'DQN'
     if method == 'PG':
         agent = agent_pg.AgentPG(
             sim.state_space_shape,              # The size of the spate space
@@ -197,7 +197,7 @@ if __name__ == "__main__":
             hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
             initializer='he_normal',            # Initializer to use for weights
             verbose=True,                       # A live status of the training
-            lr=1e-2,                            # The learning rate
+            lr=1e-3,                            # The learning rate
             max_memory_size=10000,              # The maximum size of the replay memory
             epsilon_behavior=(1, 0.1, 2000),    # The decay followed by epsilon
             batch_size=32,                      # The batch size used during the training
@@ -221,4 +221,4 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent
-    sim.train(target_score=150, max_episodes=10, process_average_over=100, test_every=50, test_on=0, save_training_data=True)
+    sim.train(target_score=150, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=True)
