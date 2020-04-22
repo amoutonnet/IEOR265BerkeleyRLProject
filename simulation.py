@@ -11,7 +11,7 @@ from utils import agent_dql
 from utils import agent_pg
 import matplotlib.pyplot as plt
 import tensorflow.keras.initializers as initializers
-from tensorflow import random as tf_random
+import tensorflow as tf
 import pandas as pd
 
 random.seed(150)
@@ -109,11 +109,11 @@ class Simulation():
         training_rolling_average = training_rolling_average[:ep]
         timestamps = timestamps[:ep]
         fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-        ax1.plot(training_score, 'b', linewidth=1, label='Score')
+        ax1.plot(training_score, 'tab:blue', linewidth=1, label='Score')
         ax1.plot(training_rolling_average, 'orange', linewidth=1, label='Rolling Average')
         ax1.plot([target_score] * ep, 'r', linewidth=1, label='Target Score')
         ax1.set(xlabel='Episodes', ylabel='Score')
-        ax2.plot(timestamps, training_score, 'b', linewidth=1)
+        ax2.plot(timestamps, training_score, 'tab:blue', linewidth=1)
         ax2.plot(timestamps, training_rolling_average, 'orange', linewidth=1)
         ax2.plot(timestamps, [target_score] * ep, 'r', linewidth=1)
         ax2.set(xlabel='Time (s)')
@@ -137,15 +137,17 @@ class Simulation():
                 self.agent.lambd
             )
         else:
-            archive_name = '{}_target_{}_double_{}_dueling_{}_per_{}_epssteps_{}_memorysize_{}.csv'.format(
+            archive_name = '{} target {} update {} double {} dueling {} per {} epssteps {} memorysize {} .csv'.format(
                 agent_type,
                 target_score,
                 self.agent.update_target_every,
+                self.agent.use_double,
                 self.agent.use_dueling,
                 self.agent.use_per,
                 len(self.agent.epsilons),
                 self.agent.max_memory_size
             )
+            self.agent.q_network.save_weights('q_network' + archive_name)
         data = np.stack((timestamps, training_score, training_rolling_average)).reshape(-1, 3)
         columns = ['timestamps', 'training_score', 'training_rolling_average']
         pd.DataFrame(data=data, columns=columns).to_csv('Results/' + archive_name, sep=';')
@@ -191,27 +193,27 @@ if __name__ == "__main__":
             sim.state_space_shape,              # The shape of the state space
             sim.action_space_size,              # The size of the action space
             gamma=0.99,                         # The discounting factor
-            hidden_conv_layers=[[32, 8, 4], [64, 4, 2], [64, 3, 1]],              # A list of parameters of for each hidden convolutionnal layer
+            hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer [filters, kernel_size, strides]
             hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
             initializer='he_normal',            # Initializer to use for weights
             verbose=True,                       # A live status of the training
             lr=1e-2,                            # The learning rate
-            max_memory_size=25000,              # The maximum size of the replay memory
+            max_memory_size=10000,              # The maximum size of the replay memory
             epsilon_behavior=(1, 0.1, 2000),    # The decay followed by epsilon
             batch_size=32,                      # The batch size used during the training
+            update_target_every=500,           # Update the TD targets q-values every update_target_every optimization steps
             double_dict={
-                'used': True,                   # Whether we use double q learning or not
-                'update_target_every': 200      # Update the TD targets q-values every update_target_every optimization steps
+                'used': True                    # Whether we use double q learning or not    
             },
             dueling_dict={
                 'used': False,                  # Whether we use dueling q learning or not
             },
             per_dict={
-                'used': False,                   # Whether we use prioritized experience replay or not
+                'used': True,                   # Whether we use prioritized experience replay or not
                 'alpha': 0.6,                   # Prioritization intensity
                 'beta': 0.4,                    # Initial parameter for Importance Sampling
-                'beta_increment': 0.0002,        # Increment per sampling for Importance Sampling
-                'epsilon': 0.01                # Value assigned to have non-zero probailities
+                'beta_increment': 0.001,        # Increment per sampling for Importance Sampling
+                'epsilon': 0.01                 # Value assigned to have non-zero probabilities
             }
         )
     # We build the neural network

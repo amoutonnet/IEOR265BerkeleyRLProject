@@ -7,58 +7,8 @@ import random
 from . import per_utils
 
 
-class AgentDQLBase(agent.Agent):
 
-    def __init__(self,
-                 state_space_shape,               # The shape of the state space
-                 action_space_size,               # The size of the action space
-                 gamma=0.99,                      # The discounting factor
-                 hidden_conv_layers=[],           # A list of parameters of for each hidden convolutionnal layer
-                 hidden_dense_layers=[32],        # A list of parameters of for each hidden dense layer
-                 initializer='random_normal',
-                 verbose=False,                   # A live status of the training
-                 lr=1e-2,                         # The learning rate
-                 max_memory_size=2000,            # The maximum size of the replay memory
-                 epsilon_behavior=(1, 0.1, 100),  # The decay followed by epsilon
-                 batch_size=32,                   # The batch size used during the training
-                 ):
-        super().__init__(
-            state_space_shape=state_space_shape,
-            action_space_size=action_space_size,
-            gamma=gamma,
-            hidden_conv_layers=hidden_conv_layers,
-            hidden_dense_layers=hidden_dense_layers,
-            initializer=initializer,
-            verbose=verbose
-        )
-        self.optimizer = tf.keras.optimizers.Adam(lr)
-        self.max_memory_size = max_memory_size
-        self.memory = None
-        self.loss = float('inf')
-        self.epsilons = np.linspace(*epsilon_behavior)
-        self.batch_size = batch_size
-        self.opti_step = 0
-        self.main_name = 'dql'
-
-    def print_verbose(self, ep, total_episodes, episode_reward, rolling_score):
-        if self.verbose:
-            current_eps = self.epsilons[min(self.opti_step, len(self.epsilons) - 1)]
-            print('Episode {:3d}/{:5d} | Current Score ({:3.2f}) Rolling Average ({:3.2f}) | Epsilon ({:.2f}) ReplayMemorySize ({:5d}) OptiStep ({:5d}) Loss ({:.4f})'.format(ep,
-                                                                                                    total_episodes,
-                                                                                                    episode_reward,
-                                                                                                    rolling_score,
-                                                                                                    current_eps,
-                                                                                                    len(self.memory),
-                                                                                                    self.opti_step,
-                                                                                                    self.loss,
-                                                                                                    ),
-                  end="\r")
-
-    def learn_on_policy(self):
-        pass
-
-
-class AgentDQL(AgentDQLBase):
+class AgentDQL(agent.Agent):
     def __init__(self,
                  state_space_shape,                 # The shape of the state space
                  action_space_size,                 # The size of the action space
@@ -71,9 +21,9 @@ class AgentDQL(AgentDQLBase):
                  max_memory_size=2000,              # The maximum size of the replay memory
                  epsilon_behavior=(1, 0.1, 100),    # The decay followed by epsilon
                  batch_size=32,                     # The batch size used during the training
+                 update_target_every=100,           # Update the TD targets q-values every update_target_every optimization steps
                  double_dict={
-                     'used': False,                 # Whether we use double q learning or not
-                     'update_target_every': 50      # Update the TD targets q-values every update_target_every optimization steps
+                     'used': False                  # Whether we use double q learning or not
                  },
                  dueling_dict={
                      'used': False,                 # Whether we use dueling q learning or not
@@ -92,19 +42,20 @@ class AgentDQL(AgentDQLBase):
             hidden_conv_layers=hidden_conv_layers,
             hidden_dense_layers=hidden_dense_layers,
             initializer=initializer,
-            verbose=verbose,
-            lr=lr,
-            max_memory_size=max_memory_size,
-            epsilon_behavior=epsilon_behavior,
-            batch_size=batch_size,
+            verbose=verbose
         )
+        self.optimizer = tf.keras.optimizers.Adam(lr)
+        self.max_memory_size = max_memory_size
+        self.memory = None
+        self.loss = float('inf')
+        self.epsilons = np.linspace(*epsilon_behavior)
+        self.batch_size = batch_size
+        self.update_target_every=update_target_every
+        self.opti_step = 0
+        self.main_name = 'dql'
         self.use_double = double_dict.pop('used')
         self.use_dueling = dueling_dict.pop('used')
         self.use_per = per_dict.pop('used')
-        if self.use_double:
-            self.update_target_every = double_dict['update_target_every']
-        else:
-            self.update_target_every = None
         if self.use_per:
             self.memory = per_utils.PrioritizedExperienceMemory(
                 self.max_memory_size,
@@ -195,6 +146,9 @@ class AgentDQL(AgentDQLBase):
             q_values_next = np.amax(self.target_model(next_states_batch).numpy(), axis=1)
         return q_values_next
 
+    def learn_on_policy(self):
+        pass
+
     def learn_off_policy(self):
         if (self.opti_step + 1) % self.update_target_every == 0:
             self.target_model.set_weights(self.q_network.get_weights())
@@ -223,3 +177,17 @@ class AgentDQL(AgentDQLBase):
 
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))   # We remember the current flow of state/action/reward/next_state/done
+
+    def print_verbose(self, ep, total_episodes, episode_reward, rolling_score):
+        if self.verbose:
+            current_eps = self.epsilons[min(self.opti_step, len(self.epsilons) - 1)]
+            print('Episode {:3d}/{:5d} | Current Score ({:3.2f}) Rolling Average ({:3.2f}) | Epsilon ({:.2f}) ReplayMemorySize ({:5d}) OptiStep ({:5d}) Loss ({:.10f})'.format(ep,
+                                                                                                    total_episodes,
+                                                                                                    episode_reward,
+                                                                                                    rolling_score,
+                                                                                                    current_eps,
+                                                                                                    len(self.memory),
+                                                                                                    self.opti_step,
+                                                                                                    self.loss,
+                                                                                                    ),
+                  end="\r")

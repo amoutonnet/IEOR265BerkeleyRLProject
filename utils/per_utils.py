@@ -114,7 +114,7 @@ class PrioritizedExperienceMemory(SumTree):
             idx, priority, data = self.get_leaf(v)
             sampling_prob = priority / self.total_priority
             # IS = (1/P(i))**b /max wi == P(i)**(-b)  /max wi
-            ISWeights[:, i] = np.power(n * sampling_prob, -self.beta)
+            ISWeights[:, i] = np.power(self.capacity * sampling_prob, -self.beta)
             batch_idx[i] = idx
             batch_memory.append(data)
         return batch_idx, batch_memory, ISWeights
