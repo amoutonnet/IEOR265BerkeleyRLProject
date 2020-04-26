@@ -82,7 +82,7 @@ class AgentPGBase(agent.Agent):
 
         return advantages
 
-    def predict_action(self, state):
+    def predict_action(self, state, current_eps=None):
         state = state[np.newaxis, :]   # We augment the dimension of the state
         action_probs = self.policy(state)  # Sample actions probabilities with the neural network
         action = np.random.choice(self.action_space_size, p=action_probs[0].numpy())  # We sample the action based on these probabilities
@@ -98,18 +98,26 @@ class AgentPGBase(agent.Agent):
         values[-1] = rewards[-1] - critic_values[-1]
         return np.array(list(itertools.accumulate(values[::-1], lambda x, y: x * (self.gamma * self.lambd) + y))[::-1], dtype=np.float32)
 
-    def print_verbose(self, ep, total_episodes, episode_reward, rolling_score):
+    def print_verbose(self, ep, total_episodes, train_episode_reward, test_episode_reward, train_rolling_score=None, test_rolling_score=None):
         if self.verbose:
-            print('Episode {:3d}/{:5d}\
-                 | Current Score ({:3.2f}) Rolling Average ({:3.2f}) \
-                 | Actor Loss ({:.4f}) Critic Loss ({:.4f})'.format(ep,
-                                                                    total_episodes,
-                                                                    episode_reward,
-                                                                    rolling_score,
-                                                                    self.loss_actor,
-                                                                    self.loss_critic
-                                                                    ),
-                  end="\r")
+            if train_rolling_score is None:
+                print('Ep {:5d}/{:5d} | TrainCS ({:.2f}) | TestCS ({:.2f}) | ActLoss ({:.10f}) CritLoss ({:.10f})'.format(ep,
+                                                                                                                          total_episodes,
+                                                                                                                          train_episode_reward,
+                                                                                                                          test_episode_reward,
+                                                                                                                          self.loss_actor,
+                                                                                                                          self.loss_critic
+                                                                                                                          ), end="\r")
+            else:
+                print('Ep {:5d}/{:5d} | TrainCS ({:.2f}) TrainRA ({:.2f}) | TestCS ({:.2f}) TestRA ({:.2f}) | ActLoss ({:.10f}) CritLoss ({:.10f})'.format(ep,
+                                                                                                                                                           total_episodes,
+                                                                                                                                                           train_episode_reward,
+                                                                                                                                                           train_rolling_score,
+                                                                                                                                                           test_episode_reward,
+                                                                                                                                                           test_rolling_score,
+                                                                                                                                                           self.loss_actor,
+                                                                                                                                                           self.loss_critic
+                                                                                                                                                           ), end="\r")
 
     def learn_off_policy(self):
         pass

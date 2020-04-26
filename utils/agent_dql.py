@@ -7,7 +7,6 @@ import random
 from . import per_utils
 
 
-
 class AgentDQL(agent.Agent):
     def __init__(self,
                  state_space_shape,                 # The shape of the state space
@@ -50,7 +49,7 @@ class AgentDQL(agent.Agent):
         self.loss = float('inf')
         self.epsilons = np.linspace(*epsilon_behavior)
         self.batch_size = batch_size
-        self.update_target_every=update_target_every
+        self.update_target_every = update_target_every
         self.opti_step = 0
         self.main_name = 'dql'
         self.use_double = double_dict.pop('used')
@@ -137,7 +136,7 @@ class AgentDQL(agent.Agent):
     def get_next_q_values(self, next_states_batch):
         if self.use_double:
             # Find the best action as defined by q_network
-            best_next_actions = np.argmax(self.q_network(next_states_batch).numpy(), axis = 1)
+            best_next_actions = np.argmax(self.q_network(next_states_batch).numpy(), axis=1)
             # Compute the Q-value associatde with best actions thanks to the target network
             q_values_next = tf.math.reduce_sum(
                 self.target_model(next_states_batch) * tf.one_hot(best_next_actions, self.action_space_size), axis=1)
@@ -178,16 +177,30 @@ class AgentDQL(agent.Agent):
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))   # We remember the current flow of state/action/reward/next_state/done
 
-    def print_verbose(self, ep, total_episodes, episode_reward, rolling_score):
+    def print_verbose(self, ep, total_episodes, train_episode_reward, test_episode_reward, train_rolling_score=None, test_rolling_score=None):
         if self.verbose:
             current_eps = self.epsilons[min(self.opti_step, len(self.epsilons) - 1)]
-            print('Episode {:3d}/{:5d} | Current Score ({:3.2f}) Rolling Average ({:3.2f}) | Epsilon ({:.2f}) ReplayMemorySize ({:5d}) OptiStep ({:5d}) Loss ({:.10f})'.format(ep,
-                                                                                                    total_episodes,
-                                                                                                    episode_reward,
-                                                                                                    rolling_score,
-                                                                                                    current_eps,
-                                                                                                    len(self.memory),
-                                                                                                    self.opti_step,
-                                                                                                    self.loss,
-                                                                                                    ),
-                  end="\r")
+            if train_rolling_score is None:
+                print('Ep {:5d}/{:5d} | TrainCS ({:.2f}) | TestCS ({:.2f}) | Eps ({:.2f}) RMS ({:5d}) OptiStep ({:5d}) Loss ({:.10f})'.format(ep,
+                                                                                                                                              total_episodes,
+                                                                                                                                              train_episode_reward,
+                                                                                                                                              test_episode_reward,
+                                                                                                                                              current_eps,
+                                                                                                                                              len(
+                                                                                                                                                  self.memory),
+                                                                                                                                              self.opti_step,
+                                                                                                                                              self.loss,
+                                                                                                                                              ), end="\r")
+            else:
+                print('Ep {:5d}/{:5d} | TrainCS ({:.2f}) TrainRA ({:.2f}) | TestCS ({:.2f}) TestRA ({:.2f}) | Eps ({:.2f}) RMS ({:5d}) OptiStep ({:5d}) Loss ({:.10f})'.format(ep,
+                                                                                                                                                                               total_episodes,
+                                                                                                                                                                               train_episode_reward,
+                                                                                                                                                                               train_rolling_score,
+                                                                                                                                                                               test_episode_reward,
+                                                                                                                                                                               test_rolling_score,
+                                                                                                                                                                               current_eps,
+                                                                                                                                                                               len(
+                                                                                                                                                                                   self.memory),
+                                                                                                                                                                               self.opti_step,
+                                                                                                                                                                               self.loss,
+                                                                                                                                                                               ), end="\r")

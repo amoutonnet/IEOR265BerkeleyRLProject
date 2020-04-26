@@ -66,80 +66,99 @@ class Simulation():
         time.sleep(2)
         self.env.close()
 
-    def train(self, target_score, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=False):
+    def test_intelligent(self, verbose=False):
+        """
+        This function is used to test the performances of a trained agent in the environment
+        """
+        state = self.reset_env()  # We get x0
+        episode_reward = 0
+        done = False
+        while not done:
+            action = self.agent.predict_action(state, current_eps=0)  # we sample the action
+            obs, reward, done, _ = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
+            episode_reward += reward
+            state = self.get_next_state(state, obs)
+        return episode_reward
+
+    def train(self, nb_computations=1, max_episodes=1000, process_average_over=100, save_training_data=False, plot_evolution=False):
         if self.agent is None:
             raise Exception('You need to set an actor before training it !')
-        print('\n%s\n' % ('Training'.center(100, '-')))
-        # Here we train our neural network with the given method
-        training_score = np.empty((max_episodes,))
-        training_rolling_average = np.empty((max_episodes,))
-        total_rewards = deque(maxlen=process_average_over)  # We initialize the total reward list
-        rolling_mean_score = 0
-        timestamps = np.empty((max_episodes))
-        start_date = time.time()
-        ep = 0
-        while rolling_mean_score < target_score and ep < max_episodes:
-            state = self.reset_env()  # We get x0
-            episode_reward = 0
-            done = False
-            visualize = ep > test_on and (ep + 1) % test_every < test_on
-            # While the game is not finished
-            while not done:
-                action = self.agent.predict_action(state)  # we sample the action
-                obs, reward, done, _ = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
-                if visualize:
-                    # If its test time, we vizualize the environment
-                    self.env.render()
-                episode_reward += reward
-                next_state = self.get_next_state(state, obs)
-                self.agent.remember(state, action, reward, next_state, done)
-                self.agent.learn_off_policy()
-                state = next_state
-            self.agent.learn_on_policy()
-            total_rewards.append(episode_reward)
-            rolling_mean_score = np.mean(total_rewards)
-            training_score[ep] = episode_reward
-            training_rolling_average[ep] = rolling_mean_score
-            timestamps[ep] = time.time() - start_date
-            self.agent.print_verbose(ep + 1, max_episodes, episode_reward, rolling_mean_score)
-            self.env.close()
-            ep += 1
-        print('\n\n%s\n' % ('Training Done'.center(100, '-')))
-        training_score = training_score[:ep]
-        training_rolling_average = training_rolling_average[:ep]
-        timestamps = timestamps[:ep]
-        fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-        ax1.plot(training_score, 'tab:blue', linewidth=1, label='Score')
-        ax1.plot(training_rolling_average, 'orange', linewidth=1, label='Rolling Average')
-        ax1.plot([target_score] * ep, 'r', linewidth=1, label='Target Score')
-        ax1.set(xlabel='Episodes', ylabel='Score')
-        ax2.plot(timestamps, training_score, 'tab:blue', linewidth=1)
-        ax2.plot(timestamps, training_rolling_average, 'orange', linewidth=1)
-        ax2.plot(timestamps, [target_score] * ep, 'r', linewidth=1)
-        ax2.set(xlabel='Time (s)')
-        fig.suptitle('Evolution of the score during the Training {}'.format(target_score))
-        fig.legend(ncol=3, loc='upper center', bbox_to_anchor=(0.5, 0.955), prop={'size': 9})
-        plt.show()
-        if save_training_data:
-            self.save_training_data(target_score, training_score, training_rolling_average, timestamps)
+        for computation in range(nb_computations):
+            print('\n%s\n' % (('Training Computation no. %d' % (computation + 1)).center(100, '-')))
+            # Here we train our neural network with the given method
+            training_score = np.empty((max_episodes,))
+            testing_score = np.empty((max_episodes,))
+            if process_average_over > 0:
+                rolling_ave_training = np.empty((max_episodes,))
+                rolling_ave_testing = np.empty((max_episodes,))
+            timestamps = np.empty((max_episodes))
+            ep = 0
+            while ep < max_episodes:
+                start_time = time.time()
+                state = self.reset_env()  # We get x0
+                episode_reward = 0
+                done = False
+                # While the game is not finished
+                while not done:
+                    action = self.agent.predict_action(state)  # we sample the action
+                    obs, reward, done, _ = self.env.step(action)  # We take a step forward in the environment by taking the sampled action
+                    episode_reward += reward
+                    next_state = self.get_next_state(state, obs)
+                    self.agent.remember(state, action, reward, next_state, done)
+                    self.agent.learn_off_policy()
+                    state = next_state
+                self.agent.learn_on_policy()
+                timestamps[ep] = time.time() - start_time
+                test_episode_reward = self.test_intelligent()
+                training_score[ep] = episode_reward
+                testing_score[ep] = test_episode_reward
+                if process_average_over > 0:
+                    rolling_ave_training[ep] = np.mean(training_score[max(0, ep - process_average_over):ep + 1])
+                    rolling_ave_testing[ep] = np.mean(testing_score[max(0, ep - process_average_over):ep + 1])
+                    self.agent.print_verbose(ep + 1, max_episodes, episode_reward, test_episode_reward, rolling_ave_training[ep], rolling_ave_testing[ep])
+                else:
+                    self.agent.print_verbose(ep + 1, max_episodes, episode_reward, test_episode_reward)
+                ep += 1
+            timestamps = np.cumsum(timestamps)
+            if save_training_data:
+                self.save_training_data(computation, training_score, testing_score, timestamps)
+                print('\n%s\n' % (('Training Computation no. %d Saved' % (computation + 1)).center(100, '-')))
+            if plot_evolution:
+                fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+                ax1.plot(training_score, 'b', linewidth=1, label='Train Score')
+                ax1.plot(testing_score, 'g', linewidth=1, label='Test Score')
+                ax1.set(xlabel='Episodes', ylabel='Score')
+                ax2.plot(timestamps, training_score, 'b', linewidth=1)
+                ax2.plot(timestamps, testing_score, 'g', linewidth=1)
+                ax2.set(xlabel='Time (s)')
+                if process_average_over > 0:
+                    rolling_ave_training = rolling_ave_training[:ep]
+                    rolling_ave_testing = rolling_ave_testing[:ep]
+                    ax1.plot(rolling_ave_training, 'orange', linewidth=1, label='Train Rolling Average')
+                    ax1.plot(rolling_ave_testing, 'red', linewidth=1, label='Test Rolling Average')
+                    ax2.plot(timestamps, rolling_ave_training, 'orange', linewidth=1)
+                    ax2.plot(timestamps, rolling_ave_testing, 'red', linewidth=1)
+                fig.suptitle('Evolution of the score during the Training')
+                fig.legend(ncol=5, loc='upper center', bbox_to_anchor=(0.5, 0.955), prop={'size': 9})
+                plt.show()
 
-    def save_training_data(self, target_score, training_score, training_rolling_average, timestamps):
+    def save_training_data(self, computation, training_score, testing_score, timestamps):
         """
         Saving training data to csv file
         """
         agent_type = self.agent.__class__.__name__
         if agent_type == 'AgentPG':
-            archive_name = '{}_target_{}_entropy_{}_ppo_{}_lambd_{}.csv'.format(
+            archive_name = '{}_comp_{}_entropy_{}_ppo_{}_lambd_{}'.format(
                 agent_type,
-                target_score,
+                computation,
                 self.agent.temperature,
                 self.agent.epsilon,
                 self.agent.lambd
             )
         else:
-            archive_name = '{}_target_{}_update_{}_double_{}_dueling_{}_per_{}_epssteps_{}_memorysize_{}.csv'.format(
+            archive_name = '{}_comp_{}_update_{}_double_{}_dueling_{}_per_{}_epssteps_{}_memorysize_{}'.format(
                 agent_type,
-                target_score,
+                computation,
                 self.agent.update_target_every,
                 self.agent.use_double,
                 self.agent.use_dueling,
@@ -147,11 +166,10 @@ class Simulation():
                 len(self.agent.epsilons),
                 self.agent.max_memory_size
             )
-            self.agent.q_network.save_weights('Results/' + archive_name)
-        data = np.stack((timestamps, training_score, training_rolling_average)).reshape(-1, 3)
-        columns = ['timestamps', 'training_score', 'training_rolling_average']
-        pd.DataFrame(data=data, columns=columns).to_csv('Results/' + archive_name, sep=';')
-        print('\n%s\n' % ('Training Data Saved'.center(100, '-')))
+            # self.agent.q_network.save_weights('Weights/final_weights' + archive_name + ".h5")
+        data = np.stack((timestamps, training_score, testing_score)).reshape(-1, 3)
+        columns = ['timestamps', 'training_score', 'testing_score']
+        pd.DataFrame(data=data, columns=columns).to_csv('Results/' + archive_name + ".csv", sep=';')
 
 
 if __name__ == "__main__":
@@ -165,23 +183,19 @@ if __name__ == "__main__":
             sim.action_space_size,              # The size of the action space
             gamma=0.99,                         # The discounting factor
             hidden_conv_layers=[                # A list of parameters of for each hidden convolutionnal layer
-                (32, 3, 1),
-                (16, 2, 1)
             ],
             hidden_dense_layers=[               # A list of parameters of for each hidden dense layer
-                128,
-                64,
                 32
             ],
             initializer='random_normal',        # Initializer to use for weights
             verbose=True,                       # A live status of the training
-            lr_actor=1e-3,                      # Learning rate
-            lr_critic=1e-3,                     # Learning rate for A2C critic part
-            lambd=0.8,                          # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
-            epochs=1,                          # The number of time we train actor and critic on the batch of data obtained during an episode
+            lr_actor=1e-2,                      # Learning rate
+            lr_critic=1e-2,                     # Learning rate for A2C critic part
+            lambd=1,                            # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
+            epochs=1,                           # The number of time we train actor and critic on the batch of data obtained during an episode
             entropy_dict={
                 'used': True,                   # Whether or not Entropy Regulaarization is used
-                'temperature': 1e-3                # Temperature parameter for entropy reg
+                'temperature': 1e-3             # Temperature parameter for entropy reg
             },
             ppo_dict={
                 'used': True,                   # Whether or not Proximal policy optimization is used
@@ -201,9 +215,9 @@ if __name__ == "__main__":
             max_memory_size=10000,              # The maximum size of the replay memory
             epsilon_behavior=(1, 0.1, 2000),    # The decay followed by epsilon
             batch_size=32,                      # The batch size used during the training
-            update_target_every=500,           # Update the TD targets q-values every update_target_every optimization steps
+            update_target_every=500,            # Update the TD targets q-values every update_target_every optimization steps
             double_dict={
-                'used': True                    # Whether we use double q learning or not    
+                'used': True                    # Whether we use double q learning or not
             },
             dueling_dict={
                 'used': False,                  # Whether we use dueling q learning or not
@@ -220,5 +234,5 @@ if __name__ == "__main__":
     agent.build_network()
     # We set this agent in the simulation
     sim.set_agent(agent)
-    # We train the agent
-    sim.train(target_score=150, max_episodes=1000, process_average_over=100, test_every=50, test_on=0, save_training_data=True)
+    # We train the agent for a given number of computations and episodes
+    sim.train(nb_computations=1, max_episodes=100, process_average_over=0, save_training_data=True, plot_evolution=True)
