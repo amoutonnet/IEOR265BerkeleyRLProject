@@ -121,7 +121,7 @@ class Simulation():
                 ep += 1
             timestamps = np.cumsum(timestamps)
             if save_training_data:
-                self.save_training_data(computation, training_score, testing_score, timestamps)
+                self.save_training_data(computation, max_episodes, training_score, testing_score, timestamps)
                 print('\n%s\n' % (('Training Computation no. %d Saved' % (computation + 1)).center(100, '-')))
             if plot_evolution:
                 fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
@@ -142,23 +142,25 @@ class Simulation():
                 fig.legend(ncol=5, loc='upper center', bbox_to_anchor=(0.5, 0.955), prop={'size': 9})
                 plt.show()
 
-    def save_training_data(self, computation, training_score, testing_score, timestamps):
+    def save_training_data(self, computation, max_episodes, training_score, testing_score, timestamps):
         """
         Saving training data to csv file
         """
         agent_type = self.agent.__class__.__name__
         if agent_type == 'AgentPG':
-            archive_name = '{}_comp_{}_entropy_{}_ppo_{}_lambd_{}'.format(
+            archive_name = '{}_comp{}_maxep{}_entropy{}_ppo{}_lambd{}'.format(
                 agent_type,
                 computation,
+                max_episodes,
                 self.agent.temperature,
                 self.agent.epsilon,
                 self.agent.lambd
             )
         else:
-            archive_name = '{}_comp_{}_update_{}_double_{}_dueling_{}_per_{}_epssteps_{}_memorysize_{}'.format(
+            archive_name = '{}_comp{}_maxep{}_update{}_double{}_dueling{}_per{}_epssteps{}_memorysize{}'.format(
                 agent_type,
                 computation,
+                max_episodes,
                 self.agent.update_target_every,
                 self.agent.use_double,
                 self.agent.use_dueling,
