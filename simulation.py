@@ -1,4 +1,5 @@
 import os
+import shutil
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import gym
 import time
@@ -17,6 +18,7 @@ import pandas as pd
 random.seed(100)
 np.random.seed(100)
 tf_random.set_seed(100)
+
 
 class Simulation():
 
@@ -126,7 +128,7 @@ class Simulation():
             timestamps = np.cumsum(timestamps)
             if save_training_data:
                 self.save_training_data(computation, training_score, testing_score, timestamps)
-                print('\n%s\n' % (('Training Computation no. %d Saved' % (computation + 1)).center(100, '-')))
+                print('\n\n%s\n' % (('Training Computation no. %d Saved' % (computation + 1)).center(100, '-')))
             if plot_evolution:
                 fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
                 ax1.plot(training_score, 'tab:blue', linewidth=1, label='Train Score')
@@ -159,7 +161,7 @@ class Simulation():
                 self.agent.temperature,
                 self.agent.epsilon,
                 self.agent.lambd
-            )
+            ).replace(".", "")
         else:
             self.folder_name = '{}_comp{}_maxep{}_update{}_double{}_dueling{}_per{}_epssteps{}_rms{}'.format(
                 agent_type,
@@ -171,18 +173,17 @@ class Simulation():
                 self.agent.use_per,
                 self.agent.epsilon_behavior[2],
                 self.agent.max_memory_size
-            )
-        try:
-            os.makedirs('Results/' + self.folder_name)
+            ).replace(".", "")
+        fold_path = 'Results/' + self.folder_name
+        if not os.path.exists(fold_path):
             print('\n%s\n' % (('Folder for this config created in folder Results.').center(100, '-')))
             print(self.folder_name)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
-            else:
-                print('\n%s\n' % (('Folder for this config already exists in folder Results. Overwriting.').center(100, '-')))
-                print(self.folder_name)
-        
+        else:
+            shutil.rmtree(fold_path)
+            print('\n%s\n' % (('Folder for this config already exists in folder Results. Overwriting.').center(100, '-')))
+            print(self.folder_name)
+        os.makedirs(fold_path)
+
     def save_training_data(self, computation, training_score, testing_score, timestamps):
         """
         Save training data to csv file
@@ -191,14 +192,14 @@ class Simulation():
         columns = ['timestamps', 'training_score', 'testing_score']
         data = pd.DataFrame(list(zip(timestamps, training_score, testing_score)), columns=columns)
         path = 'Results/' + self.folder_name + "/"
-        data.to_csv(path + "comp" + str(computation + 1) + ".csv" , sep=';', index=False)
+        data.to_csv(path + "comp" + str(computation + 1) + ".csv", sep=';', index=False)
 
 
 if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    method = 'DQN'
+    method = 'PG'
     if method == 'PG':
         agent = agent_pg.AgentPG(
             sim.state_space_shape,              # The size of the spate space
@@ -255,4 +256,4 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent for a given number of computations and episodes
-    sim.train(nb_computations=2, max_episodes=100, process_average_over=100, save_training_data=True, plot_evolution=False)
+    sim.train(nb_computations=10, max_episodes=200, process_average_over=0, save_training_data=True, plot_evolution=False)

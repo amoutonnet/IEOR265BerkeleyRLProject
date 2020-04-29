@@ -1,84 +1,57 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 
-def plot_computations(folder_name, nb_computations, alpha, confidence_interval=True, save_figure=True):
+def plot_computations(folder_name, nb_computations, alpha, process_average_over=20, confint=True, ra=True, save_figure=True):
     path = 'Results/' + folder_name + "/"
-    li = []
-    file_paths = [ path + 'comp' + str(comp) +'.csv' for comp in range(1, nb_computations + 1)]
-    for filename in file_paths:
-        df = pd.read_csv(filename, index_col=None, sep=';')
+    data = []
+    for i in range(1, nb_computations + 1):
+        df = pd.read_csv(path + "comp%d.csv" % i, index_col=None, sep=';')
         df.sort_values(by=['timestamps'], inplace=True)  # sort in good order...
-        df.reset_index(drop=True, inplace=True)  # ... update the index...
-        df['ep'] = df.index  # and set it as the episode #
-        li.append(df)
+        df["training_score_ra"] = df["training_score"].rolling(window=process_average_over, min_periods=1).mean()
+        df["testing_score_ra"] = df["testing_score"].rolling(window=process_average_over, min_periods=1).mean()
+        df.index += 1
+        df.index.names = ["ep"]
+        data.append(df)
 
-    # Concatenate all files and bootstrap mean over episode for timestamp and scores
-    all_df = pd.concat(li, ignore_index=True)  #concatenate all files (dataframes) into one
-    stats_df = all_df.groupby(['ep'], as_index=False).mean()  # mean by ep
-
-    # compute confidence interval
-    quantile_low, quantile_upp = (1 - alpha) / 2, alpha + (1 - alpha) / 2
-    lower, upper = [], []
-    for ep in range(len(stats_df.index)):
-        temp = all_df.loc[all_df['ep'] == ep]  # take all same episodes values to compute confidence interval
-        lower.append(temp.quantile(quantile_low).to_frame().T)  # list of 1-line dataframes with lower percentile
-        upper.append(temp.quantile(quantile_upp).to_frame().T)
-    lower_df = pd.concat(lower, ignore_index=True)  # concatenate all dataframes in one of same length as stats_df
-    upper_df = pd.concat(upper, ignore_index=True)
-    lower_df.rename(columns={  # rename columns for clarity
-        'timestamps': 'timestamps_low',
-        'training_score':'training_score_low',
-        'testing_score':'testing_score_low'
-    }, inplace=True)
-    upper_df.rename(columns={
-        'timestamps': 'timestamps_upp',
-        'training_score':'training_score_upp',
-        'testing_score':'testing_score_upp'
-    }, inplace=True)
-    lower_df['ep'] = lower_df.ep.astype('int64')  # ep for converted to float64 when quantiles were computed, changing it back
-    upper_df['ep'] = upper_df.ep.astype('int64')
-
-    # Add it to the mean df and convert to dict of numpy
-    stats_df = stats_df.join(lower_df, on='ep', lsuffix='_left', rsuffix='_right')  # join mean and lower CI based on ep
-    stats_df.drop(columns=['ep_right'], inplace=True)  # drop one ep column
-    stats_df.rename(columns={'ep_left':'ep'}, inplace=True)  # rename the otehr ep column to 'ep'
-    stats_df = stats_df.join(upper_df, on='ep', lsuffix='_left', rsuffix='_right')
-    stats_df.drop(columns=['ep_right'], inplace=True)
-    stats_df.rename(columns={'ep_left':'ep'}, inplace=True)
-    data = {}  # dictionnary containing numpy arrays to be ploted
-    for column_name in stats_df.columns.values:
-        data[column_name] = stats_df[column_name].to_numpy()
+    alldf = pd.concat(data, axis=1, keys=range(len(data)))
+    keydf = alldf.swaplevel(0, 1, axis=1).groupby(level=0, axis=1)
+    meandf = keydf.mean()
+    lower_df = keydf.quantile((1 - alpha) / 2)
+    upper_df = keydf.quantile(1 - (1 - alpha) / 2)
 
     # Plot
-    fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-    ax1.plot(data['ep'], data['training_score'], c='b', linewidth=1, label='Train Score')
-    ax1.plot(data['ep'], data['testing_score'], c='g', linewidth=1, label='Test Score')
-    if confidence_interval:
-        ax1.fill_between(data['ep'], data['training_score_low'], data['training_score_upp'], color='b', alpha=0.2, label='%.2f%% CI training' %alpha)
-        ax1.fill_between(data['ep'], data['testing_score_low'], data['testing_score_upp'], color='g', alpha=0.2, label='%.2f%% CI testing' %alpha)
-    ax1.set(xlabel='Episodes', ylabel='Score')
-    if confidence_interval:
-        mask = data['ep'] % 20 == 0
-        xerr_left, xerr_right = data['timestamps_low'] * mask, data['timestamps_upp'] * mask
-        ax2.errorbar(data['timestamps'], data['training_score'], c='b', linewidth=1, xerr=[xerr_left, xerr_right], ecolor='tab:blue', elinewidth=.7, capsize=5)
-        ax2.errorbar(data['timestamps'], data['testing_score'], c='g', linewidth=1, xerr=[xerr_left, xerr_right], ecolor='tab:green', elinewidth=.7, capsize=5)
-        ax2.fill_between(data['timestamps'], data['training_score_low'], data['training_score_upp'], color='b', alpha=0.2)
-        ax2.fill_between(data['timestamps'], data['testing_score_low'], data['testing_score_upp'], color='g', alpha=0.2)
-    ax2.set(xlabel='Time (s)')
-    fig.suptitle('Confidence interval for Training and Testing, bootstraped over %d computations' % nb_computations)
-    fig.legend(ncol=5, loc='upper center', bbox_to_anchor=(0.5, 0.955), prop={'size': 9})
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    if ra:
+        ax1.plot(meandf.index, meandf['training_score_ra'], c='b', linewidth=1, label='Train Score RA')
+        ax1.plot(meandf.index, meandf['testing_score_ra'], c='g', linewidth=1, label='Test Score RA')
+        if confint:
+            ax1.fill_between(meandf.index, lower_df['training_score_ra'], upper_df['training_score_ra'], color='b', alpha=0.2, label='%.2f%% CI Train RA' % alpha)
+            ax1.fill_between(meandf.index, lower_df['testing_score_ra'], upper_df['testing_score_ra'], color='g', alpha=0.2, label='%.2f%% CI Test RA' % alpha)
+    else:
+        ax1.plot(meandf.index, meandf['training_score'], c='b', linewidth=1, label='Train Score')
+        ax1.plot(meandf.index, meandf['testing_score'], c='g', linewidth=1, label='Test Score')
+        if confint:
+            ax1.fill_between(meandf.index, lower_df['training_score'], upper_df['training_score'], color='b', alpha=0.2, label='%.2f%% CI Train' % alpha)
+            ax1.fill_between(meandf.index, lower_df['testing_score'], upper_df['testing_score'], color='g', alpha=0.2, label='%.2f%% CI Test' % alpha)
+    ax1.set(xlabel='Episodes', ylabel='Score per Episode')
+    ax2.plot(meandf.index, meandf['timestamps'], c='b', linewidth=1, label='Time')
+    if confint:
+        ax2.fill_between(meandf.index, lower_df['timestamps'], upper_df['timestamps'], color='b', alpha=0.2, label='%.2f%% CI Time' % alpha)
+    ax2.set(xlabel='Episodes', ylabel='Time (s)')
+    fig.suptitle('Training and Testing Performances (CI bootstraped over %d computations)' % nb_computations)
+    ax1.legend(loc='upper left', prop={'size': 9})
+    ax2.legend(loc='upper left', prop={'size': 9})
     if save_figure:
         plt.savefig(path + folder_name, dpi=500)
     plt.show()
 
-    
+
 if __name__ == "__main__":
     nb_computations = 10            # Number of computations for bootstrapping
     alpha = 0.95                    # Confidence interval
-    folder_name = 'AgentPG_comp10_maxep200_entropy0001_ppo02_lambd1'
+    folder_name = 'AgentPG_comp%d_maxep200_entropy0001_ppo02_lambd1' % nb_computations
     # filename = ['AgentDQL_comp%d_maxep200_update200_doubleTrue_duelingFalse_perTrue_epssteps1000_rms20000.csv' % comp for comp in range(1, nb_computations+1)]
-    plot_computations(folder_name, nb_computations, alpha)
-    
-
+    plot_computations(folder_name, nb_computations, alpha, process_average_over=20, ra=True, confint=True, save_figure=True)
