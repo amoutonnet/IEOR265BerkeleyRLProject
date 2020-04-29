@@ -25,7 +25,7 @@ if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    method = 'DQN'
+    method = 'PG'
     if method == 'PG':
         agent = agent_pg.AgentPG(
             sim.state_space_shape,              # The size of the spate space
@@ -82,14 +82,11 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent for a given number of computations and episodes
-    sim.train(nb_computations=100, max_episodes=200, process_average_over=100, save_training_data=True, plot_evolution=False)
+    sim.train(nb_computations=10, max_episodes=200, process_average_over=100, save_training_data=True, plot_evolution=True)
     
     # Bootstrap and grap computation from generated files
-    alpha = 0.95                                # Confidence interval
-    computations = 100                          # Number of computations for bootstrapping
-    filenames = [
-        'AgentDQL_comp%d_maxep200_update200_doubleTrue_duelingFalse_perFalse_epssteps1000_rms20000.csv' %i for i in range(1, computations + 1)
-    ]
-    graph.plot_computations(filenames, alpha)
+    nb_computations = 10            # Number of computations for bootstrapping
+    alpha = 0.95                    # Confidence interval
+    graph.plot_computations(sim.folder_name, nb_computations, alpha)
 
     

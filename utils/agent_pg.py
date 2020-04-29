@@ -39,6 +39,7 @@ class AgentPGBase(agent.Agent):
         self.loss_critic = float('inf')
         self.lambd = lambd
         self.main_name = 'pg'
+        self.first_computation = True  # If True print model summary, if not, do not print
 
     def init_agent_for_training(self):
         self.memory = list()
@@ -77,7 +78,8 @@ class AgentPGBase(agent.Agent):
         # Compiling critic model
         self.critic.compile(loss='mse', optimizer=self.optimizer_critic, experimental_run_tf_function=False)
 
-        if self.verbose:
+        if self.verbose and self.first_computation:
+            self.first_computation = False
             print('\n%s\n' % ('Neural Networks'.center(100, '-')))
             self.actor.summary(line_length=120)
             print()
@@ -169,7 +171,6 @@ class AgentPG(AgentPGBase):
             self.temperature = entropy_dict['temperature']
         else:
             self.temperature = 0
-
         self.epochs = epochs
 
     def build_network(self):

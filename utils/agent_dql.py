@@ -1,9 +1,9 @@
-from . import agent
 from collections import deque
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import numpy as np
 import random
+from . import agent
 from . import per_utils
 
 
@@ -55,6 +55,7 @@ class AgentDQL(agent.Agent):
         self.use_per = per_dict.pop('used')
         if self.use_per:
             self.per_dict = per_dict
+        self.first_computation = True  # If True print model summary, if not, do not print
 
     def init_agent_for_training(self):
         self.opti_step = 0
@@ -132,7 +133,8 @@ class AgentDQL(agent.Agent):
         # Copy of the network for target calculation, updated every self.update_target_estimator_every
         self.target_model = tf.keras.models.clone_model(self.q_network)
 
-        if self.verbose:
+        if self.verbose and self.first_computation:
+            self.first_computation = False
             print('\n%s\n' % ('Neural Networks'.center(100, '-')))
             self.q_network.summary(line_length=120)
 

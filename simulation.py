@@ -82,10 +82,13 @@ class Simulation():
     def train(self, nb_computations=1, max_episodes=1000, process_average_over=100, save_training_data=False, plot_evolution=False):
         if self.agent is None:
             raise Exception('You need to set an actor before training it !')
+        if save_training_data:
+            # Computes the name of the folder for this simulation and create it or warns for overwriting if it already exists
+            self.folder_name_init(nb_computations, max_episodes)
         for computation in range(nb_computations):
-            print('\n%s\n' % (('Training Computation no. %d' % (computation + 1)).center(100, '-')))
             # Initialize neural network(s)
             self.agent.init_agent_for_training()
+            print('\n%s\n' % (('Training Computation no. %d' % (computation + 1)).center(100, '-')))
             # Here we train our neural network with the given method
             training_score = np.empty((max_episodes,))
             testing_score = np.empty((max_episodes,))
@@ -122,57 +125,73 @@ class Simulation():
                 ep += 1
             timestamps = np.cumsum(timestamps)
             if save_training_data:
-                self.save_training_data(computation, max_episodes, training_score, testing_score, timestamps)
+                self.save_training_data(computation, training_score, testing_score, timestamps)
                 print('\n%s\n' % (('Training Computation no. %d Saved' % (computation + 1)).center(100, '-')))
             if plot_evolution:
                 fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
                 ax1.plot(training_score, 'tab:blue', linewidth=1, label='Train Score')
-                ax1.plot(testing_score, 'tab:olive', linewidth=1, label='Test Score')
+                ax1.plot(testing_score, 'orange', linewidth=1, label='Test Score')
                 ax1.set(xlabel='Episodes', ylabel='Score')
                 ax2.plot(timestamps, training_score, 'tab:blue', linewidth=1)
-                ax2.plot(timestamps, testing_score, 'tab:olive', linewidth=1)
+                ax2.plot(timestamps, testing_score, 'orange', linewidth=1)
                 ax2.set(xlabel='Time (s)')
                 if process_average_over > 0:
                     rolling_ave_training = rolling_ave_training[:ep]
                     rolling_ave_testing = rolling_ave_testing[:ep]
-                    ax1.plot(rolling_ave_training, 'orange', linewidth=1, label='Train Rolling Average')
+                    ax1.plot(rolling_ave_training, 'blue', linewidth=1, label='Train Rolling Average')
                     ax1.plot(rolling_ave_testing, 'red', linewidth=1, label='Test Rolling Average')
-                    ax2.plot(timestamps, rolling_ave_training, 'orange', linewidth=1)
+                    ax2.plot(timestamps, rolling_ave_training, 'blue', linewidth=1)
                     ax2.plot(timestamps, rolling_ave_testing, 'red', linewidth=1)
                 fig.suptitle('Evolution of the score during the Training')
                 fig.legend(ncol=5, loc='upper center', bbox_to_anchor=(0.5, 0.955), prop={'size': 9})
                 plt.show()
 
-    def save_training_data(self, computation, max_episodes, training_score, testing_score, timestamps):
+    def folder_name_init(self, nb_computations, max_episodes):
         """
-        Saving training data to csv file
+        Create (if necessary) and compute the folder name associated with the simulation parameters
         """
         agent_type = self.agent.__class__.__name__
         if agent_type == 'AgentPG':
-            archive_name = '{}_comp{}_maxep{}_entropy{}_ppo{}_lambd{}'.format(
+            self.folder_name = '{}_comp{}_maxep{}_entropy{}_ppo{}_lambd{}'.format(
                 agent_type,
-                computation + 1,
+                nb_computations,
                 max_episodes,
                 self.agent.temperature,
                 self.agent.epsilon,
                 self.agent.lambd
             )
         else:
-            archive_name = '{}_comp{}_maxep{}_update{}_double{}_dueling{}_per{}_epssteps{}_rms{}'.format(
+            self.folder_name = '{}_comp{}_maxep{}_update{}_double{}_dueling{}_per{}_epssteps{}_rms{}'.format(
                 agent_type,
-                computation + 1,
+                nb_computations,
                 max_episodes,
                 self.agent.update_target_every,
                 self.agent.use_double,
                 self.agent.use_dueling,
                 self.agent.use_per,
-                len(self.agent.epsilons),
+                self.agent.epsilon_behavior[2],
                 self.agent.max_memory_size
             )
-            # self.agent.q_network.save_weights('Weights/final_weights' + archive_name + ".h5")
+        try:
+            os.makedirs('Results/' + self.folder_name)
+            print('\n%s\n' % (('Folder for this config created in folder Results.').center(100, '-')))
+            print(self.folder_name)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+            else:
+                print('\n%s\n' % (('Folder for this config already exists in folder Results. Overwriting.').center(100, '-')))
+                print(self.folder_name)
+        
+    def save_training_data(self, computation, training_score, testing_score, timestamps):
+        """
+        Save training data to csv file
+        """
+        # self.agent.q_network.save_weights('Weights/final_weights' + archive_name + ".h5")
         columns = ['timestamps', 'training_score', 'testing_score']
         data = pd.DataFrame(list(zip(timestamps, training_score, testing_score)), columns=columns)
-        data.to_csv('Results/' + archive_name + ".csv", sep=';', index=False)
+        path = 'Results/' + self.folder_name + "/"
+        data.to_csv(path + "comp" + str(computation + 1) + ".csv" , sep=';', index=False)
 
 
 if __name__ == "__main__":
@@ -233,9 +252,7 @@ if __name__ == "__main__":
                 'epsilon': 0.01                 # Value assigned to have non-zero probabilities
             }
         )
-    # We build the neural network
-    # agent.build_network()
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent for a given number of computations and episodes
-    sim.train(nb_computations=10, max_episodes=200, process_average_over=100, save_training_data=True, plot_evolution=False)
+    sim.train(nb_computations=2, max_episodes=100, process_average_over=100, save_training_data=True, plot_evolution=False)
