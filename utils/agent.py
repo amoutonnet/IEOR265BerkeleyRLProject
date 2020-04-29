@@ -50,6 +50,9 @@ class Agent():
                                       )(x)
         return x
 
+    def init_agent_for_training(self):
+        raise NotImplementedError
+    
     def build_network(self):
         raise NotImplementedError
 

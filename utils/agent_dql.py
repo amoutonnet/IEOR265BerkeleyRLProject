@@ -45,23 +45,36 @@ class AgentDQL(agent.Agent):
         )
         self.optimizer = tf.keras.optimizers.Adam(lr)
         self.max_memory_size = max_memory_size
-        self.memory = None
         self.loss = float('inf')
-        self.epsilons = np.linspace(*epsilon_behavior)
+        self.epsilon_behavior = epsilon_behavior
         self.batch_size = batch_size
         self.update_target_every = update_target_every
-        self.opti_step = 0
         self.main_name = 'dql'
         self.use_double = double_dict.pop('used')
         self.use_dueling = dueling_dict.pop('used')
         self.use_per = per_dict.pop('used')
         if self.use_per:
+            self.per_dict = per_dict
+
+    def init_agent_for_training(self):
+        self.opti_step = 0
+        self.init_epsilons()
+        self.init_replay_memory()
+        self.build_network()
+
+    def init_epsilons(self):
+        """ Function to init / reset epsilons each time you want to retrain """
+        self.epsilons = np.linspace(*self.epsilon_behavior)
+        
+    def init_replay_memory(self):
+        """ Function to init / reset replay memory each time you want to retrain """
+        if self.use_per:
             self.memory = per_utils.PrioritizedExperienceMemory(
                 self.max_memory_size,
-                per_dict['alpha'],
-                per_dict['beta'],
-                per_dict['beta_increment'],
-                per_dict['epsilon'],
+                self.per_dict['alpha'],
+                self.per_dict['beta'],
+                self.per_dict['beta_increment'],
+                self.per_dict['epsilon'],
             )
         else:
             self.memory = deque(maxlen=self.max_memory_size)
@@ -186,8 +199,7 @@ class AgentDQL(agent.Agent):
                                                                                                                                               train_episode_reward,
                                                                                                                                               test_episode_reward,
                                                                                                                                               current_eps,
-                                                                                                                                              len(
-                                                                                                                                                  self.memory),
+                                                                                                                                              len(self.memory),
                                                                                                                                               self.opti_step,
                                                                                                                                               self.loss,
                                                                                                                                               ), end="\r")
@@ -199,8 +211,7 @@ class AgentDQL(agent.Agent):
                                                                                                                                                                                test_episode_reward,
                                                                                                                                                                                test_rolling_score,
                                                                                                                                                                                current_eps,
-                                                                                                                                                                               len(
-                                                                                                                                                                                   self.memory),
+                                                                                                                                                                               len(self.memory),
                                                                                                                                                                                self.opti_step,
                                                                                                                                                                                self.loss,
                                                                                                                                                                                ), end="\r")

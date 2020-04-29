@@ -38,8 +38,11 @@ class AgentPGBase(agent.Agent):
         self.loss_actor = -float('inf')
         self.loss_critic = float('inf')
         self.lambd = lambd
-        self.memory = list()
         self.main_name = 'pg'
+
+    def init_agent_for_training(self):
+        self.memory = list()
+        self.build_network()
 
     def build_network(self):
         # States as input

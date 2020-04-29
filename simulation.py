@@ -14,10 +14,9 @@ import tensorflow.keras.initializers as initializers
 from tensorflow import random as tf_random
 import pandas as pd
 
-random.seed(150)
-np.random.seed(150)
-tf_random.set_seed(150)
-
+random.seed(100)
+np.random.seed(100)
+tf_random.set_seed(100)
 
 class Simulation():
 
@@ -85,6 +84,8 @@ class Simulation():
             raise Exception('You need to set an actor before training it !')
         for computation in range(nb_computations):
             print('\n%s\n' % (('Training Computation no. %d' % (computation + 1)).center(100, '-')))
+            # Initialize neural network(s)
+            self.agent.init_agent_for_training()
             # Here we train our neural network with the given method
             training_score = np.empty((max_episodes,))
             testing_score = np.empty((max_episodes,))
@@ -125,11 +126,11 @@ class Simulation():
                 print('\n%s\n' % (('Training Computation no. %d Saved' % (computation + 1)).center(100, '-')))
             if plot_evolution:
                 fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-                ax1.plot(training_score, 'b', linewidth=1, label='Train Score')
-                ax1.plot(testing_score, 'g', linewidth=1, label='Test Score')
+                ax1.plot(training_score, 'tab:blue', linewidth=1, label='Train Score')
+                ax1.plot(testing_score, 'tab:olive', linewidth=1, label='Test Score')
                 ax1.set(xlabel='Episodes', ylabel='Score')
-                ax2.plot(timestamps, training_score, 'b', linewidth=1)
-                ax2.plot(timestamps, testing_score, 'g', linewidth=1)
+                ax2.plot(timestamps, training_score, 'tab:blue', linewidth=1)
+                ax2.plot(timestamps, testing_score, 'tab:olive', linewidth=1)
                 ax2.set(xlabel='Time (s)')
                 if process_average_over > 0:
                     rolling_ave_training = rolling_ave_training[:ep]
@@ -150,16 +151,16 @@ class Simulation():
         if agent_type == 'AgentPG':
             archive_name = '{}_comp{}_maxep{}_entropy{}_ppo{}_lambd{}'.format(
                 agent_type,
-                computation,
+                computation + 1,
                 max_episodes,
                 self.agent.temperature,
                 self.agent.epsilon,
                 self.agent.lambd
             )
         else:
-            archive_name = '{}_comp{}_maxep{}_update{}_double{}_dueling{}_per{}_epssteps{}_memorysize{}'.format(
+            archive_name = '{}_comp{}_maxep{}_update{}_double{}_dueling{}_per{}_epssteps{}_rms{}'.format(
                 agent_type,
-                computation,
+                computation + 1,
                 max_episodes,
                 self.agent.update_target_every,
                 self.agent.use_double,
@@ -169,9 +170,9 @@ class Simulation():
                 self.agent.max_memory_size
             )
             # self.agent.q_network.save_weights('Weights/final_weights' + archive_name + ".h5")
-        data = np.stack((timestamps, training_score, testing_score)).reshape(-1, 3)
         columns = ['timestamps', 'training_score', 'testing_score']
-        pd.DataFrame(data=data, columns=columns).to_csv('Results/' + archive_name + ".csv", sep=';')
+        data = pd.DataFrame(list(zip(timestamps, training_score, testing_score)), columns=columns)
+        data.to_csv('Results/' + archive_name + ".csv", sep=';', index=False)
 
 
 if __name__ == "__main__":
@@ -214,10 +215,10 @@ if __name__ == "__main__":
             initializer='he_normal',            # Initializer to use for weights
             verbose=True,                       # A live status of the training
             lr=1e-3,                            # The learning rate
-            max_memory_size=10000,              # The maximum size of the replay memory
-            epsilon_behavior=(1, 0.1, 2000),    # The decay followed by epsilon
+            max_memory_size=20000,              # The maximum size of the replay memory
+            epsilon_behavior=(1, 0.1, 1000),    # The decay followed by epsilon
             batch_size=32,                      # The batch size used during the training
-            update_target_every=500,            # Update the TD targets q-values every update_target_every optimization steps
+            update_target_every=200,            # Update the TD targets q-values every update_target_every optimization steps
             double_dict={
                 'used': True                    # Whether we use double q learning or not
             },
@@ -225,16 +226,16 @@ if __name__ == "__main__":
                 'used': False,                  # Whether we use dueling q learning or not
             },
             per_dict={
-                'used': True,                   # Whether we use prioritized experience replay or not
+                'used': False,                   # Whether we use prioritized experience replay or not
                 'alpha': 0.6,                   # Prioritization intensity
                 'beta': 0.4,                    # Initial parameter for Importance Sampling
-                'beta_increment': 0.001,        # Increment per sampling for Importance Sampling
+                'beta_increment': 0.002,        # Increment per sampling for Importance Sampling
                 'epsilon': 0.01                 # Value assigned to have non-zero probabilities
             }
         )
     # We build the neural network
-    agent.build_network()
+    # agent.build_network()
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent for a given number of computations and episodes
-    sim.train(nb_computations=1, max_episodes=100, process_average_over=0, save_training_data=True, plot_evolution=True)
+    sim.train(nb_computations=10, max_episodes=200, process_average_over=100, save_training_data=True, plot_evolution=False)
