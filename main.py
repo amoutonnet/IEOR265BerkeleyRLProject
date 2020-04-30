@@ -25,7 +25,7 @@ if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    method = 'PG'
+    method = 'DQL'
     if method == 'PG':
         agent = agent_pg.AgentPG(
             sim.state_space_shape,              # The size of the spate space
@@ -56,8 +56,12 @@ if __name__ == "__main__":
             sim.state_space_shape,              # The shape of the state space
             sim.action_space_size,              # The size of the action space
             gamma=0.99,                         # The discounting factor
-            hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer [filters, kernel_size, strides]
-            hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
+            hidden_conv_layers=[                # A list of parameters of for each hidden convolutionnal layer [filters, kernel_size, strides]
+
+            ],
+            hidden_dense_layers=[               # A list of parameters of for each hidden dense layer
+                32
+            ],
             initializer='he_normal',            # Initializer to use for weights
             verbose=True,                       # A live status of the training
             lr=1e-3,                            # The learning rate
@@ -72,21 +76,25 @@ if __name__ == "__main__":
                 'used': False,                  # Whether we use dueling q learning or not
             },
             per_dict={
-                'used': True,                   # Whether we use prioritized experience replay or not
+                'used': False,                   # Whether we use prioritized experience replay or not
                 'alpha': 0.6,                   # Prioritization intensity
                 'beta': 0.4,                    # Initial parameter for Importance Sampling
                 'beta_increment': 0.002,        # Increment per sampling for Importance Sampling
                 'epsilon': 0.01                 # Value assigned to have non-zero probabilities
             }
         )
+
     # We set this agent in the simulation
     sim.set_agent(agent)
+
+    plt.ioff()
     # We train the agent for a given number of computations and episodes
-    sim.train(nb_computations=10, max_episodes=200, process_average_over=100, save_training_data=True, plot_evolution=True)
+    nb_computations = 2            # Number of computations for bootstrapping
+    sim.train(nb_computations=nb_computations, max_episodes=300, process_average_over=100, save_training_data=True, plot_evolution=False)
     
-    # Bootstrap and grap computation from generated files
-    nb_computations = 10            # Number of computations for bootstrapping
+    # Bootstrap and grap computation from generated files         
     alpha = 0.95                    # Confidence interval
-    graph.plot_computations(sim.folder_name, nb_computations, alpha)
+    graph.plot_computations(sim.folder_name, nb_computations, alpha, process_avg_over=20, ra=True, confint=True, save_figure=True)
+    graph.plot_first_over([sim.folder_name], nb_computations, testing_or_training='testing', first_over=180, display_mean=True, save_figure=True)
 
     

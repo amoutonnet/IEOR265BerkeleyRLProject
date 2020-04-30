@@ -131,19 +131,19 @@ class Simulation():
                 print('\n\n%s\n' % (('Training Computation no. %d Saved' % (computation + 1)).center(100, '-')))
             if plot_evolution:
                 fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-                ax1.plot(training_score, 'tab:blue', linewidth=1, label='Train Score')
-                ax1.plot(testing_score, 'orange', linewidth=1, label='Test Score')
+                ax1.plot(training_score, c='lightblue', linewidth=1, label='Train Score')
+                ax1.plot(testing_score, c='lightgreen', linewidth=1, label='Test Score')
                 ax1.set(xlabel='Episodes', ylabel='Score')
-                ax2.plot(timestamps, training_score, 'tab:blue', linewidth=1)
-                ax2.plot(timestamps, testing_score, 'orange', linewidth=1)
+                ax2.plot(timestamps, training_score, c='lightblue', linewidth=1)
+                ax2.plot(timestamps, testing_score, c='lightgreen', linewidth=1)
                 ax2.set(xlabel='Time (s)')
                 if process_average_over > 0:
                     rolling_ave_training = rolling_ave_training[:ep]
                     rolling_ave_testing = rolling_ave_testing[:ep]
-                    ax1.plot(rolling_ave_training, 'blue', linewidth=1, label='Train Rolling Average')
-                    ax1.plot(rolling_ave_testing, 'red', linewidth=1, label='Test Rolling Average')
-                    ax2.plot(timestamps, rolling_ave_training, 'blue', linewidth=1)
-                    ax2.plot(timestamps, rolling_ave_testing, 'red', linewidth=1)
+                    ax1.plot(rolling_ave_training, 'b', linewidth=1, label='Train Rolling Average')
+                    ax1.plot(rolling_ave_testing, 'g', linewidth=1, label='Test Rolling Average')
+                    ax2.plot(timestamps, rolling_ave_training, 'b', linewidth=1)
+                    ax2.plot(timestamps, rolling_ave_testing, 'g', linewidth=1)
                 fig.suptitle('Evolution of the score during the Training')
                 fig.legend(ncol=5, loc='upper center', bbox_to_anchor=(0.5, 0.955), prop={'size': 9})
                 plt.show()
@@ -212,9 +212,9 @@ if __name__ == "__main__":
             ],
             initializer='random_normal',        # Initializer to use for weights
             verbose=True,                       # A live status of the training
-            lr_actor=1e-2,                      # Learning rate
-            lr_critic=1e-2,                     # Learning rate for A2C critic part
-            lambd=1,                            # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
+            lr_actor=1e-3,                      # Learning rate
+            lr_critic=1e-3,                     # Learning rate for A2C critic part
+            lambd=0.8,                            # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
             epochs=1,                           # The number of time we train actor and critic on the batch of data obtained during an episode
             entropy_dict={
                 'used': True,                   # Whether or not Entropy Regulaarization is used
@@ -254,6 +254,6 @@ if __name__ == "__main__":
             }
         )
     # We set this agent in the simulation
-    sim.set_agent(agent)
+    # sim.set_agent(agent)
     # We train the agent for a given number of computations and episodes
-    sim.train(nb_computations=10, max_episodes=200, process_average_over=0, save_training_data=True, plot_evolution=False)
+    # sim.train(nb_computations=10, max_episodes=200, process_average_over=0, save_training_data=True, plot_evolution=False)

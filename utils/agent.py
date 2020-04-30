@@ -72,3 +72,9 @@ class Agent():
         x -= x.mean()
         x /= (x.std() + DELTA)
         return x
+    
+    def verbose(self, ep, total_episodes, train_episode_reward, test_episode_reward, train_rolling_score=None, test_rolling_score=None):
+        raise NotImplementedError
+
+    
+
