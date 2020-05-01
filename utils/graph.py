@@ -48,6 +48,8 @@ def plot_computations(folder_name, nb_computations, alpha=None, process_avg_over
     fig.suptitle('Training and Testing Performances bootstraped over %d computations, with %.2f CI' % (nb_computations, alpha))
     ax1.legend(loc='upper left', prop={'size': 9})
     ax2.legend(loc='upper left', prop={'size': 9})
+    ax1.grid(True, which="both", linestyle='--', color='0.95')
+    ax2.grid(True, which="both", linestyle='--', color='0.95')
     if save_figure:
         plt.savefig(path + 'bootstrapped_mean_and_CI', dpi=500)
     plt.show()
@@ -106,9 +108,11 @@ def plot_comparison(folder_names, nb_computations, alpha=None, process_avg_over=
         first_over
     ))
     ax2.set_title(test_or_train.title() + 'ing Performances \nbootstraped over %d computations' % nb_computations)
-    ax2.set(xlabel='Time (s)', ylabel='Score rolling average on %d episodes' % process_avg_over)
+    ax2.set(xlabel='Time (s)', ylabel='Score rolling average over %d episodes' % process_avg_over)
     ax1.legend(loc='upper left')
     ax2.legend(loc='lower right')
+    ax1.grid(True, which="both", linestyle='--', color='0.95')
+    ax2.grid(True, which="both", linestyle='--', color='0.95')
     if save_figure:
         if len(folder_names) == 1:
             plt.savefig('Results/' + folder_names[0] + '/plot_first_over_%d' % first_over, dpi=500)
@@ -158,6 +162,7 @@ def plot_first_over(folder_names, nb_computations, test_or_train='test', first_o
         first_over
     ))
     plt.legend(loc='upper left', prop={'size': 9})
+    plt.grid(True, which="both", linestyle='--', color='0.95')
     if save_figure:
         if len(folder_names) == 1:
             plt.savefig('Results/' + folder_names[0] + '/plot_first_over_%d' % first_over, dpi=500)
