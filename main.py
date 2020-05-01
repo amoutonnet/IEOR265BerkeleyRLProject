@@ -73,13 +73,13 @@ if __name__ == "__main__":
                 'used': True                    # Whether we use double q learning or not
             },
             dueling_dict={
-                'used': False,                  # Whether we use dueling q learning or not
+                'used': True,                  # Whether we use dueling q learning or not
             },
             per_dict={
                 'used': False,                   # Whether we use prioritized experience replay or not
                 'alpha': 0.6,                   # Prioritization intensity
                 'beta': 0.4,                    # Initial parameter for Importance Sampling
-                'beta_increment': 0.002,        # Increment per sampling for Importance Sampling
+                'beta_increment': 0.0001,        # Increment per sampling for Importance Sampling
                 'epsilon': 0.01                 # Value assigned to have non-zero probabilities
             }
         )
@@ -87,14 +87,11 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
 
-    plt.ioff()
     # We train the agent for a given number of computations and episodes
-    nb_computations = 2            # Number of computations for bootstrapping
-    sim.train(nb_computations=nb_computations, max_episodes=300, process_average_over=100, save_training_data=True, plot_evolution=False)
+    nb_computations = 50            # Number of computations for bootstrapping
+    sim.train(nb_computations=nb_computations, max_episodes=500, process_average_over=100, save_training_data=True, plot_evolution=False)
     
     # Bootstrap and grap computation from generated files         
     alpha = 0.95                    # Confidence interval
     graph.plot_computations(sim.folder_name, nb_computations, alpha, process_avg_over=20, ra=True, confint=True, save_figure=True)
-    graph.plot_first_over([sim.folder_name], nb_computations, testing_or_training='testing', first_over=180, display_mean=True, save_figure=True)
-
-    
+    graph.plot_first_over([sim.folder_name], nb_computations, test_or_train='test', first_over=180, display_mean=True, save_figure=True)

@@ -93,7 +93,7 @@ class PrioritizedExperienceMemory(SumTree):
         if max_priority == 0:
             max_priority = self.abs_error_upper
         self.add(self.abs_error_upper, transition)  # Set the max p for new p
-        if self.len_memory <= self.capacity:
+        if self.len_memory < self.capacity:
             self.len_memory += 1
 
     def sample(self, n):
