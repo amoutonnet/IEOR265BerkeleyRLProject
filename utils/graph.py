@@ -54,7 +54,7 @@ def plot_computations(folder_name, nb_computations, alpha=None, process_avg_over
         plt.savefig(path + 'bootstrapped_mean_and_CI', dpi=500)
     plt.show()
 
-def plot_comparison(folder_names, nb_computations, alpha=None, process_avg_over=20, test_or_train='test', first_over=150, display_mean=True, save_figure=True):
+def plot_comparison(folder_names, nb_computations, alpha=None, process_avg_over=20, test_or_train='test', save_figure=True):
     """
     For each folder, plot:
     1. the ep (x) and timestamps (y) at which the rolling avg for each computations first reached selected "first_over" score, test_or_train.
@@ -77,47 +77,29 @@ def plot_comparison(folder_names, nb_computations, alpha=None, process_avg_over=
             df.index += 1
             df.index.names = ["ep"]
             data.append(df)
-            df['ep'] = df.index
-            max_ep = max(len(df.index), max_ep)
-            best_df = df.loc[df['score_ra'] >= first_over].head(1)
-            best_data.append(best_df)
-        
-        # plot first over graph
-        best_df = pd.concat(best_data, keys=range(len(best_data)), ignore_index=True)
-        mean_best_df = best_df.mean()
-        std_best_df = best_df.std()
-        ax1.scatter(best_df['ep'], best_df['timestamps'], color=c, s=15, alpha=0.5, label=label)
-        if display_mean:
-            ax1.errorbar(mean_best_df['ep'], mean_best_df['timestamps'], xerr=std_best_df['ep'], yerr=std_best_df['timestamps'], color = c, fmt='o', elinewidth=.5, capsize=2)
-
         # plot comparison rolling averages and related confidence intervals
         all_df = pd.concat(data, axis=1, keys=range(len(data)))
         keydf = all_df.swaplevel(0, 1, axis=1).groupby(level=0, axis=1)
         meandf = keydf.mean()
+        ax1.plot(meandf.index, meandf['score_ra'], c=c, linewidth=1, label=label)
         ax2.plot(meandf['timestamps'], meandf['score_ra'], c=c, linewidth=1, label=label)
         if alpha is not None:
             lower_df = keydf.quantile((1 - alpha) / 2)
             upper_df = keydf.quantile(1 - (1 - alpha) / 2)
+            ax1.fill_between(meandf.index, lower_df['score_ra'], upper_df['score_ra'], color=c, alpha=0.2)
             ax2.fill_between(meandf['timestamps'], lower_df['score_ra'], upper_df['score_ra'], color=c, alpha=0.2)
 
-    ax1.set(xlabel='Episodes', ylabel='Time (s)')
-    ax1.set_xlim([0, max_ep])
-    ax1.set_title('{}ing data Bootstrapped over {} computations: first time each \ncomputation reached a reward of at least {}'.format(
-        test_or_train.title(),
-        nb_computations,
-        first_over
-    ))
-    ax2.set_title(test_or_train.title() + 'ing Performances \nbootstraped over %d computations' % nb_computations)
+    ax1.set(xlabel='Episodes', ylabel='Score rolling average over %d episodes' % process_avg_over)
     ax2.set(xlabel='Time (s)', ylabel='Score rolling average over %d episodes' % process_avg_over)
-    ax1.legend(loc='upper left')
+    fig.suptitle(test_or_train.title() + 'ing Performances bootstraped over %d computations' % nb_computations)
     ax2.legend(loc='lower right')
     ax1.grid(True, which="both", linestyle='--', color='0.95')
     ax2.grid(True, which="both", linestyle='--', color='0.95')
     if save_figure:
         if len(folder_names) == 1:
-            plt.savefig('Results/' + folder_names[0] + '/plot_first_over_%d' % first_over, dpi=500)
+            plt.savefig('Results/' + folder_names[0] + '/new_comparison', dpi=500)
         else:
-            plt.savefig('Results/new_comparison_first_over_%d' % first_over, dpi=500, bbox_inches='tight')
+            plt.savefig('Results/new_comparison', dpi=500, bbox_inches='tight')
     plt.show()
 
 def plot_first_over(folder_names, nb_computations, test_or_train='test', first_over=150, process_avg_over=20, display_mean=True, save_figure=True):
@@ -171,15 +153,16 @@ def plot_first_over(folder_names, nb_computations, test_or_train='test', first_o
     plt.show()
 
 if __name__ == "__main__":
-    nb_computations = 50            # Number of computations for bootstrapping
+    nb_computations = 10            # Number of computations for bootstrapping
     alpha = 0.95                    # Confidence interval
     folder_names = [
         'AgentDQL_comp50_maxep500_update250_doubleTrue_duelingFalse_perFalse_epssteps1000_rms20000',
-        'AgentPG_comp50_maxep500_entropy0001_ppo02_lambd1',
-        'AgentDQL_comp50_maxep500_update200_doubleTrue_duelingFalse_perTrue_epssteps1000_rms20000_1',
-        'AgentDQL_comp50_maxep500_update200_doubleTrue_duelingFalse_perTrue_epssteps1000_rms20000_2',
+        # 'AgentPG_comp50_maxep500_entropy0001_ppo02_lambd1',
+        'AgentDQL_comp50_maxep500_update200_doubleTrue_duelingTrue_perFalse_epssteps1000_rms20000',
+        'AgentDQL_comp50_maxep500_update200_doubleTrue_duelingFalse_perTrue_epssteps1000_rms20000_beta2e-3',
+        'AgentDQL_comp50_maxep500_update200_doubleTrue_duelingFalse_perTrue_epssteps1000_rms20000_beta5e-4'
     ]
     # for folder_name in folder_names:
-    #     plot_computations(folder_name, nb_computations, alpha=alpha, process_avg_over=20, ra=True, confint=True, save_figure=False)
-    plot_first_over(folder_names, nb_computations, test_or_train='test', first_over=180, display_mean=True, save_figure=True)
-    plot_comparison(folder_names, nb_computations, alpha=None, process_avg_over=20, test_or_train='test', first_over=180, save_figure=True)
+    #     plot_computations(folder_name, nb_computations, alpha=alpha, process_avg_over=20, ra=True, save_figure=False)
+    plot_first_over(folder_names, nb_computations, test_or_train='test', first_over=200, display_mean=True, save_figure=False)
+    plot_comparison(folder_names, nb_computations, alpha=None, process_avg_over=20, test_or_train='test', save_figure=False)
