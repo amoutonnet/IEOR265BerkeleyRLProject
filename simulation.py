@@ -152,8 +152,8 @@ class Simulation():
         """
         Create (if necessary) and compute the folder name associated with the simulation parameters
         """
-        agent_type = self.agent.__class__.__name__
-        if agent_type == 'AgentPG':
+        agent_type = self.agent.main_name
+        if agent_type == 'pg':
             self.folder_name = '{}_comp{}_maxep{}_entropy{}_ppo{}_lambd{}'.format(
                 agent_type,
                 nb_computations,
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    method = 'PG'
+    method = 'DQN'
     if method == 'PG':
         agent = agent_pg.AgentPG(
             sim.state_space_shape,              # The size of the spate space
@@ -208,20 +208,20 @@ if __name__ == "__main__":
             hidden_conv_layers=[                # A list of parameters of for each hidden convolutionnal layer
             ],
             hidden_dense_layers=[               # A list of parameters of for each hidden dense layer
-                32
+                32,
             ],
-            initializer='random_normal',        # Initializer to use for weights
+            initializer='he_normal',        # Initializer to use for weights
             verbose=True,                       # A live status of the training
-            lr_actor=1e-3,                      # Learning rate
-            lr_critic=1e-3,                     # Learning rate for A2C critic part
-            lambd=0.8,                            # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
+            lr_actor=1e-2,                      # Learning rate
+            lr_critic=1e-2,                     # Learning rate for A2C critic part
+            lambd=0,                            # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
             epochs=1,                           # The number of time we train actor and critic on the batch of data obtained during an episode
             entropy_dict={
-                'used': True,                   # Whether or not Entropy Regulaarization is used
+                'used': False,                   # Whether or not Entropy Regulaarization is used
                 'temperature': 1e-3             # Temperature parameter for entropy reg
             },
             ppo_dict={
-                'used': True,                   # Whether or not Proximal policy optimization is used
+                'used': False,                   # Whether or not Proximal policy optimization is used
                 'epsilon': 0.2                  # Epsilon for PPO
             }
         )
@@ -230,8 +230,12 @@ if __name__ == "__main__":
             sim.state_space_shape,              # The shape of the state space
             sim.action_space_size,              # The size of the action space
             gamma=0.99,                         # The discounting factor
-            hidden_conv_layers=[],              # A list of parameters of for each hidden convolutionnal layer [filters, kernel_size, strides]
-            hidden_dense_layers=[32],           # A list of parameters of for each hidden dense layer
+            hidden_conv_layers=[                # A list of parameters of for each hidden convolutionnal layer [filters, kernel_size, strides]
+
+            ],
+            hidden_dense_layers=[               # A list of parameters of for each hidden dense layer
+                32
+            ],
             initializer='he_normal',            # Initializer to use for weights
             verbose=True,                       # A live status of the training
             lr=1e-3,                            # The learning rate
@@ -243,17 +247,17 @@ if __name__ == "__main__":
                 'used': True                    # Whether we use double q learning or not
             },
             dueling_dict={
-                'used': False,                  # Whether we use dueling q learning or not
+                'used': True,                  # Whether we use dueling q learning or not
             },
             per_dict={
                 'used': False,                   # Whether we use prioritized experience replay or not
                 'alpha': 0.6,                   # Prioritization intensity
                 'beta': 0.4,                    # Initial parameter for Importance Sampling
-                'beta_increment': 0.002,        # Increment per sampling for Importance Sampling
+                'beta_increment': 0.0001,        # Increment per sampling for Importance Sampling
                 'epsilon': 0.01                 # Value assigned to have non-zero probabilities
             }
         )
     # We set this agent in the simulation
-    # sim.set_agent(agent)
+    sim.set_agent(agent)
     # We train the agent for a given number of computations and episodes
-    # sim.train(nb_computations=10, max_episodes=200, process_average_over=0, save_training_data=True, plot_evolution=False)
+    sim.train(nb_computations=10, max_episodes=400, process_average_over=0, save_training_data=True, plot_evolution=False)
