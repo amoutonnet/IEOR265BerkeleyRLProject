@@ -234,7 +234,7 @@ if __name__ == "__main__":
 
             ],
             hidden_dense_layers=[               # A list of parameters of for each hidden dense layer
-                32
+                64
             ],
             initializer='he_normal',            # Initializer to use for weights
             verbose=True,                       # A live status of the training
@@ -247,10 +247,10 @@ if __name__ == "__main__":
                 'used': True                    # Whether we use double q learning or not
             },
             dueling_dict={
-                'used': True,                  # Whether we use dueling q learning or not
+                'used': False,                  # Whether we use dueling q learning or not
             },
             per_dict={
-                'used': False,                   # Whether we use prioritized experience replay or not
+                'used': True,                   # Whether we use prioritized experience replay or not
                 'alpha': 0.6,                   # Prioritization intensity
                 'beta': 0.4,                    # Initial parameter for Importance Sampling
                 'beta_increment': 0.0001,        # Increment per sampling for Importance Sampling
