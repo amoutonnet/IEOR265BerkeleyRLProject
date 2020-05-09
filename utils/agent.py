@@ -52,7 +52,7 @@ class Agent():
 
     def init_agent_for_training(self):
         raise NotImplementedError
-    
+
     def build_network(self):
         raise NotImplementedError
 
@@ -69,12 +69,9 @@ class Agent():
         raise NotImplementedError
 
     def normalize(self, x):
-        x -= x.mean()
-        x /= (x.std() + DELTA)
-        return x
-    
-    def verbose(self, ep, total_episodes, train_episode_reward, test_episode_reward, train_rolling_score=None, test_rolling_score=None):
+        mean = x.mean()
+        std = x.std() if x.std() > 0 else 1
+        return (x - mean) / std
+
+    def print_verbose(self, ep, total_episodes, train_episode_reward, test_episode_reward, train_rolling_score=None, test_rolling_score=None):
         raise NotImplementedError
-
-    
-

@@ -15,9 +15,12 @@ import tensorflow.keras.initializers as initializers
 from tensorflow import random as tf_random
 import pandas as pd
 
-random.seed(100)
-np.random.seed(100)
-tf_random.set_seed(100)
+
+SEED = 100
+
+random.seed(SEED)
+np.random.seed(SEED)
+tf_random.set_seed(SEED)
 
 
 class Simulation():
@@ -154,26 +157,29 @@ class Simulation():
         """
         agent_type = self.agent.main_name
         if agent_type == 'pg':
-            self.folder_name = '{}_comp{}_maxep{}_entropy{}_ppo{}_lambd{}'.format(
-                agent_type,
-                nb_computations,
-                max_episodes,
-                self.agent.temperature,
-                self.agent.epsilon,
-                self.agent.lambd
-            ).replace(".", "")
+            self.folder_name = "PG"
+            if not self.agent.use_a2c and not self.agent.use_gae and not self.agent.use_ppo and not self.agent.use_entropy_reg:
+                self.folder_name += "REINFORCE"
+            else:
+                if self.agent.use_a2c:
+                    self.folder_name += "A2C"
+                if self.agent.use_gae:
+                    self.folder_name += "GAE"
+                if self.agent.use_ppo:
+                    self.folder_name += "PPO"
+                if self.agent.use_entropy_reg:
+                    self.folder_name += "Entropy"
         else:
-            self.folder_name = '{}_comp{}_maxep{}_update{}_double{}_dueling{}_per{}_epssteps{}_rms{}'.format(
-                agent_type,
-                nb_computations,
-                max_episodes,
-                self.agent.update_target_every,
-                self.agent.use_double,
-                self.agent.use_dueling,
-                self.agent.use_per,
-                self.agent.epsilon_behavior[2],
-                self.agent.max_memory_size
-            ).replace(".", "")
+            self.folder_name = "DQL"
+            if not self.agent.use_double and not self.agent.use_dueling and not self.agent.use_per:
+                self.folder_name += "Vanilla"
+            else:
+                if self.agent.use_double:
+                    self.folder_name += "Double"
+                if self.agent.use_dueling:
+                    self.folder_name += "Dueling"
+                if self.agent.use_per:
+                    self.folder_name += "PER"
         fold_path = 'Results/' + self.folder_name
         if not os.path.exists(fold_path):
             print('\n%s\n' % (('Folder for this config created in folder Results.').center(100, '-')))
@@ -199,7 +205,7 @@ if __name__ == "__main__":
     # We create a Simulation object
     sim = Simulation(name_of_environment="CartPole-v0", nb_stacked_frame=1)
     # We create an Agent to evolve in the simulation
-    method = 'DQN'
+    method = 'PG'
     if method == 'PG':
         agent = agent_pg.AgentPG(
             sim.state_space_shape,              # The size of the spate space
@@ -208,21 +214,27 @@ if __name__ == "__main__":
             hidden_conv_layers=[                # A list of parameters of for each hidden convolutionnal layer
             ],
             hidden_dense_layers=[               # A list of parameters of for each hidden dense layer
-                32,
+                64,
             ],
-            initializer='he_normal',        # Initializer to use for weights
+            initializer='random_normal',        # Initializer to use for weights
             verbose=True,                       # A live status of the training
-            lr_actor=1e-2,                      # Learning rate
-            lr_critic=1e-2,                     # Learning rate for A2C critic part
-            lambd=0,                            # General Advantage Estimate term, 1 for full discounted reward, 0 for TD residuals
+            lr_actor=5e-3,                      # Learning rate
             epochs=1,                           # The number of time we train actor and critic on the batch of data obtained during an episode
+            a2c_dict={
+                'used': False,                  # Whether or not to use A2C
+                'lr_critic': 1e-2               # The learning rate of the critic
+            },
+            gae_dict={
+                'used': False,                  # Whether or not to use GAE
+                'lambd': 0.5,                   # lambda for GAE
+            },
             entropy_dict={
-                'used': False,                   # Whether or not Entropy Regulaarization is used
+                'used': False,                  # Whether or not Entropy Regulaarization is used
                 'temperature': 1e-3             # Temperature parameter for entropy reg
             },
             ppo_dict={
-                'used': False,                   # Whether or not Proximal policy optimization is used
-                'epsilon': 0.2                  # Epsilon for PPO
+                'used': False,                  # Whether or not Proximal policy optimization is used
+                'epsilon': 0.1                  # Epsilon for PPO
             }
         )
     else:
