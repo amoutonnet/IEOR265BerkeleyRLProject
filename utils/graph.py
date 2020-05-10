@@ -149,6 +149,8 @@ def plot_first_over(folders_data, ra=True, test_or_train='test', first_over=180,
     #     plt.title('First Time a Score of %d is Reached during %sing Phase\n(Scale and Mean bootstrapped over %d computations)' % (first_over, test_or_train.title(), nb_computations))
     plt.grid(True, which="both", linestyle='--', color='k', alpha=0.5)
     plt.legend(prop={'size': 9})
+    plt.ylim(bottom=10)
+    plt.yscale('log')
 
 
 def plot_ppo_alone(process_avg_over=50):
@@ -169,10 +171,10 @@ if __name__ == "__main__":
     process_avg_over = 50          # Rolling Average Window
     ra = True
     first_over = 180
-    # folders_data = process_folders(os.listdir('Results/'), alpha, nb_computations, process_avg_over, first_over)
-    # plot_all(folders_data, test_or_train='test', ra=ra)
-    # time_table(folders_data, latex=True)
-    # plot_comparison(folders_data, test_or_train='test', ra=ra)
-    # plot_first_over(folders_data, ra=ra, test_or_train='test', first_over=first_over, display_mean=True)
-    plot_ppo_alone()
+    folders_data = process_folders(os.listdir('Results/'), alpha, nb_computations, process_avg_over, first_over)
+    plot_all(folders_data, test_or_train='test', ra=ra)
+    time_table(folders_data, latex=True)
+    plot_comparison(folders_data, test_or_train='test', ra=ra)
+    plot_first_over(folders_data, ra=ra, test_or_train='test', first_over=first_over, display_mean=True)
+    # plot_ppo_alone()
     plt.show()
