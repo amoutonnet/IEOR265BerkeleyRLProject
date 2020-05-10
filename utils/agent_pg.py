@@ -147,10 +147,10 @@ class AgentPG(AgentPGBase):
                 # Loss for A2C
                 def actor_loss(y_true, y_pred):
                     # Here we define a custom loss for A2C policy gradient
-                    out = K.clip(y_pred, DELTA, 1)  # We need to clip y_pred as it may be equal to zero (otherwise problem with log afterwards)
-                    log_lik = K.sum(y_true * K.log(out), axis=1)  # We get the log likelyhood associated to the predictions
-                    advantages_with_entropy = advantages - self.temperature * K.stop_gradient(K.sum(log_lik, axis=-1))
-                    return -K.mean(log_lik * advantages_with_entropy, keepdims=True)  # We multiply it by the advantage (future reward here)
+                    out = K.clip(y_pred, DELTA, 1 - DELTA)  # We need to clip y_pred as it may be equal to zero (otherwise problem with log afterwards)
+                    log_lik = y_true * K.log(out)  # We get the log likelyhood associated to the predictions
+                    advantages_with_entropy = advantages - self.temperature * K.sum(K.stop_gradient(log_lik), axis=-1))
+                    return K.sum(-log_lik * advantages_with_entropy)  # We multiply it by the advantage (future reward here)
             else:
                 # Loss for A2C
                 def actor_loss(y_true, y_pred):
@@ -162,13 +162,13 @@ class AgentPG(AgentPGBase):
             # Loss for PPO
             def actor_loss(y_true, y_pred):
                 # Here we define a custom for proximal policy optimization
-                out = K.clip(y_pred, DELTA, 1)
+                out = K.clip(y_pred, DELTA, 1 - DELTA)
                 log_lik = y_true * K.log(out)
                 old_log_lik = K.stop_gradient(log_lik)
                 advantages_with_entropy = advantages - self.temperature * K.sum(old_log_lik, axis=-1)
-                ratio = K.sum(K.exp(log_lik - old_log_lik), axis=1)
+                ratio = K.sum(K.exp(log_lik - old_log_lik), axis=-1)
                 clipped_ratio = K.clip(ratio, 1 - self.epsilon, 1 + self.epsilon)
-                return -K.mean(K.minimum(ratio * advantages_with_entropy, clipped_ratio * advantages_with_entropy), keepdims=True)
+                return K.sum(-K.minimum(ratio * advantages_with_entropy, clipped_ratio * advantages_with_entropy))
 
         self.actor.compile(loss=actor_loss, optimizer=self.optimizer_actor, experimental_run_tf_function=False)
 

@@ -16,7 +16,7 @@ from tensorflow import random as tf_random
 import pandas as pd
 
 
-SEED = 100
+SEED = 150
 
 random.seed(SEED)
 np.random.seed(SEED)
