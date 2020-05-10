@@ -8,38 +8,39 @@ import os
 def process_folders(folders, alpha=0.90, nb_computations=10, process_avg_over=20, first_over=180):
     folders_data = {}
     for f in folders:
-        folders_data[f] = {}
-        folders_data[f]["first_over_test"] = []
-        folders_data[f]["first_over_train"] = []
-        folders_data[f]["first_over_test_ra"] = []
-        folders_data[f]["first_over_train_ra"] = []
-        folders_data[f]["mean_time_per_ep"] = []
-        path = 'Results/' + f + "/"
-        data = []
-        for i in range(1, nb_computations + 1):
-            df = pd.read_csv(path + "comp%d.csv" % i, index_col=None, sep=';')
-            df.sort_values(by=['timestamps'], inplace=True)  # sort in good order...
-            df.index += 1
-            df["ep"] = df.index
-            df["training_score_ra"] = df["training_score"].rolling(window=process_avg_over, min_periods=1).mean()
-            df["testing_score_ra"] = df["testing_score"].rolling(window=process_avg_over, min_periods=1).mean()
-            folders_data[f]["mean_time_per_ep"] += [df["timestamps"].diff().fillna(df["timestamps"]).mean()]
-            folders_data[f]["first_over_test"] += [df.loc[df['testing_score'] >= first_over].head(1)]
-            folders_data[f]["first_over_train"] += [df.loc[df['training_score'] >= first_over].head(1)]
-            folders_data[f]["first_over_test_ra"] += [df.loc[df['testing_score_ra'] >= first_over].head(1)]
-            folders_data[f]["first_over_train_ra"] += [df.loc[df['training_score_ra'] >= first_over].head(1)]
-            data += [df]
-        folders_data[f]["first_over_test"] = pd.concat(folders_data[f]["first_over_test"], keys=range(nb_computations), ignore_index=True)
-        folders_data[f]["first_over_train"] = pd.concat(folders_data[f]["first_over_train"], keys=range(nb_computations), ignore_index=True)
-        folders_data[f]["first_over_test_ra"] = pd.concat(folders_data[f]["first_over_test_ra"], keys=range(nb_computations), ignore_index=True)
-        folders_data[f]["first_over_train_ra"] = pd.concat(folders_data[f]["first_over_train_ra"], keys=range(nb_computations), ignore_index=True)
+        if "excluded" not in f:
+            folders_data[f] = {}
+            folders_data[f]["first_over_test"] = []
+            folders_data[f]["first_over_train"] = []
+            folders_data[f]["first_over_test_ra"] = []
+            folders_data[f]["first_over_train_ra"] = []
+            folders_data[f]["mean_time_per_ep"] = []
+            path = 'Results/' + f + "/"
+            data = []
+            for i in range(1, nb_computations + 1):
+                df = pd.read_csv(path + "comp%d.csv" % i, index_col=None, sep=';')
+                df.sort_values(by=['timestamps'], inplace=True)  # sort in good order...
+                df.index += 1
+                df["ep"] = df.index
+                df["training_score_ra"] = df["training_score"].rolling(window=process_avg_over, min_periods=1).mean()
+                df["testing_score_ra"] = df["testing_score"].rolling(window=process_avg_over, min_periods=1).mean()
+                folders_data[f]["mean_time_per_ep"] += [df["timestamps"].diff().fillna(df["timestamps"]).mean()]
+                folders_data[f]["first_over_test"] += [df.loc[df['testing_score'] >= first_over].head(1)]
+                folders_data[f]["first_over_train"] += [df.loc[df['training_score'] >= first_over].head(1)]
+                folders_data[f]["first_over_test_ra"] += [df.loc[df['testing_score_ra'] >= first_over].head(1)]
+                folders_data[f]["first_over_train_ra"] += [df.loc[df['training_score_ra'] >= first_over].head(1)]
+                data += [df]
+            folders_data[f]["first_over_test"] = pd.concat(folders_data[f]["first_over_test"], keys=range(nb_computations), ignore_index=True)
+            folders_data[f]["first_over_train"] = pd.concat(folders_data[f]["first_over_train"], keys=range(nb_computations), ignore_index=True)
+            folders_data[f]["first_over_test_ra"] = pd.concat(folders_data[f]["first_over_test_ra"], keys=range(nb_computations), ignore_index=True)
+            folders_data[f]["first_over_train_ra"] = pd.concat(folders_data[f]["first_over_train_ra"], keys=range(nb_computations), ignore_index=True)
 
-        alldf = pd.concat(data, axis=1, keys=range(len(data)))
-        keydf = alldf.swaplevel(0, 1, axis=1).groupby(level=0, axis=1)
+            alldf = pd.concat(data, axis=1, keys=range(len(data)))
+            keydf = alldf.swaplevel(0, 1, axis=1).groupby(level=0, axis=1)
 
-        folders_data[f]['meandf'] = keydf.mean()
-        folders_data[f]['lowerdf'] = keydf.quantile((1 - alpha) / 2)
-        folders_data[f]['upperdf'] = keydf.quantile(1 - (1 - alpha) / 2)
+            folders_data[f]['meandf'] = keydf.mean()
+            folders_data[f]['lowerdf'] = keydf.quantile((1 - alpha) / 2)
+            folders_data[f]['upperdf'] = keydf.quantile(1 - (1 - alpha) / 2)
     return folders_data
 
 
@@ -150,15 +151,28 @@ def plot_first_over(folders_data, ra=True, test_or_train='test', first_over=180,
     plt.legend(prop={'size': 9})
 
 
+def plot_ppo_alone(process_avg_over=50):
+    df = pd.read_csv("Results/excluded/comp1.csv", index_col=None, sep=';')
+    df.index += 1
+    # df["training_score_ra"] = df["training_score"].rolling(window=process_avg_over, min_periods=1).mean()
+    df["testing_score_ra"] = df["testing_score"].rolling(window=process_avg_over, min_periods=1).mean()
+    plt.figure()
+    plt.plot(df.index, df["testing_score_ra"])
+    plt.xlabel("Episodes")
+    plt.ylabel("Rolling Average Score")
+    plt.grid(True, which="both", linestyle='--', color='k', alpha=0.5)
+
+
 if __name__ == "__main__":
     nb_computations = 20            # Number of computations for bootstrapping
     alpha = 0.90                    # Confidence interval
     process_avg_over = 50          # Rolling Average Window
     ra = True
     first_over = 180
-    folders_data = process_folders(os.listdir('Results/'), alpha, nb_computations, process_avg_over, first_over)
+    # folders_data = process_folders(os.listdir('Results/'), alpha, nb_computations, process_avg_over, first_over)
     # plot_all(folders_data, test_or_train='test', ra=ra)
     # time_table(folders_data, latex=True)
     # plot_comparison(folders_data, test_or_train='test', ra=ra)
-    plot_first_over(folders_data, ra=ra, test_or_train='test', first_over=first_over, display_mean=True)
+    # plot_first_over(folders_data, ra=ra, test_or_train='test', first_over=first_over, display_mean=True)
+    plot_ppo_alone()
     plt.show()

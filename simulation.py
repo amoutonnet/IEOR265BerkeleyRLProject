@@ -16,7 +16,7 @@ from tensorflow import random as tf_random
 import pandas as pd
 
 
-SEED = 101
+SEED = 15
 
 random.seed(SEED)
 np.random.seed(SEED)
@@ -272,4 +272,4 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent for a given number of computations and episodes
-    sim.train(nb_computations=20, max_episodes=400, process_average_over=0, save_training_data=True, plot_evolution=False)
+    sim.train(nb_computations=1, max_episodes=1000, process_average_over=0, save_training_data=True, plot_evolution=False)
