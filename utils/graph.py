@@ -13,6 +13,7 @@ def process_folders(folders, alpha=0.90, nb_computations=10, process_avg_over=20
         folders_data[f]["first_over_train"] = []
         folders_data[f]["first_over_test_ra"] = []
         folders_data[f]["first_over_train_ra"] = []
+        folders_data[f]["mean_time_per_ep"] = []
         path = 'Results/' + f + "/"
         data = []
         for i in range(1, nb_computations + 1):
@@ -22,6 +23,7 @@ def process_folders(folders, alpha=0.90, nb_computations=10, process_avg_over=20
             df["ep"] = df.index
             df["training_score_ra"] = df["training_score"].rolling(window=process_avg_over, min_periods=1).mean()
             df["testing_score_ra"] = df["testing_score"].rolling(window=process_avg_over, min_periods=1).mean()
+            folders_data[f]["mean_time_per_ep"] += [df["timestamps"].diff().fillna(df["timestamps"]).mean()]
             folders_data[f]["first_over_test"] += [df.loc[df['testing_score'] >= first_over].head(1)]
             folders_data[f]["first_over_train"] += [df.loc[df['training_score'] >= first_over].head(1)]
             folders_data[f]["first_over_test_ra"] += [df.loc[df['testing_score_ra'] >= first_over].head(1)]
@@ -41,26 +43,53 @@ def process_folders(folders, alpha=0.90, nb_computations=10, process_avg_over=20
     return folders_data
 
 
-def plot_all(folders_data, ra=True):
+def time_table(folders_data, latex=True):
+    if not latex:
+        width = 25
+        print("-" * (5 * width + 6))
+        print("|" + "Mean Time Per Episode Table (Time in secondes)".center(5 * width + 4) + "|")
+        print("-" * (5 * width + 6))
+        print("|" + "Method".center(width) + "|" + "Mean Time Per Ep".center(width) + "|" + "Min Mean Time Per Ep".center(
+            width) + "|" + "Max Mean Time Per Ep".center(width) + "|" + "Std Mean Time Per Ep".center(width) + "|")
+        print("-" * (5 * width + 6))
+        for (method, f_data) in folders_data.items():
+            data = np.array(f_data["mean_time_per_ep"])
+            mean = data.mean()
+            low = data.min()
+            up = data.max()
+            std = data.std()
+            print("|" + "{:s}".format(method).center(width) + "|" + "{:.4f}".format(mean).center(width) + "|" + "{:.4f}".format(
+                low).center(width) + "|" + "{:.4f}".format(up).center(width) + "|" + "{:.4f}".format(std).center(width) + "|")
+        print("-" * (5 * width + 6))
+    else:
+        for (method, f_data) in folders_data.items():
+            data = np.array(f_data["mean_time_per_ep"])
+            mean = data.mean()
+            low = data.min()
+            up = data.max()
+            std = data.std()
+            print("{:s}".format(method) + " & " + "{:.4f}".format(mean) + " & " + "{:.4f}".format(
+                low) + " & " + "{:.4f}".format(up) + " & " + "{:.4f}".format(std) + "\\\\")
+
+
+def plot_all(folders_data, ra=True, test_or_train="test"):
     bba = [0.5, 0.93]
-    figscore, axesscore = plt.subplots(2, 5, sharex=True, sharey=True)
+    figscore, axesscore = plt.subplots(2, 4, sharey=True)
     for idx, (method, f_data) in enumerate(folders_data.items()):
         meandf = f_data["meandf"]
         lowerdf = f_data["lowerdf"]
         upperdf = f_data["upperdf"]
-        i = idx // 5
-        j = idx % 5
+        i = idx // 4
+        j = idx % 4
         ax = axesscore[i][j]
         if ra:
-            ax.plot(meandf.index, meandf['training_score_ra'], c='b', linewidth=1, label='Mean Train Score RA')
-            ax.plot(meandf.index, meandf['testing_score_ra'], c='g', linewidth=1, label='Mean Test Score RA')
-            ax.fill_between(meandf.index, lowerdf['training_score_ra'], upperdf['training_score_ra'], color='b', alpha=0.2, label='%d%% CI Train RA' % int(100 * alpha))
-            ax.fill_between(meandf.index, lowerdf['testing_score_ra'], upperdf['testing_score_ra'], color='g', alpha=0.2, label='%d%% CI Test RA' % int(100 * alpha))
+            ax.plot(meandf.index, meandf['%sing_score_ra' % test_or_train], c='b', linewidth=1, label='Mean %s Score RA' % test_or_train.title())
+            ax.fill_between(meandf.index, lowerdf['%sing_score_ra' % test_or_train], upperdf['%sing_score_ra' % test_or_train],
+                            color='b', alpha=0.2, label='%d%% CI %s RA' % (int(100 * alpha), test_or_train.title()))
         else:
-            ax.plot(meandf.index, meandf['training_score'], c='b', linewidth=1, label='Mean Train Score')
-            ax.plot(meandf.index, meandf['testing_score'], c='g', linewidth=1, label='Mean Test Score')
-            ax.fill_between(meandf.index, lowerdf['training_score'], upperdf['training_score'], color='b', alpha=0.2, label='%d%% CI Train' % int(100 * alpha))
-            ax.fill_between(meandf.index, lowerdf['testing_score'], upperdf['testing_score'], color='g', alpha=0.2, label='%d%% CI Test' % int(100 * alpha))
+            ax.plot(meandf.index, meandf['%sing_score' % test_or_train], c='b', linewidth=1, label='Mean %s Score' % test_or_train.title())
+            ax.fill_between(meandf.index, lowerdf['%sing_score' % test_or_train], upperdf['%sing_score' % test_or_train],
+                            color='b', alpha=0.2, label='%d%% CI %s' % (int(100 * alpha), test_or_train.title()))
         ax.grid(True, which="both", linestyle='--', color='k', alpha=0.5)
         ax.set_title(method)
         if i == 1:
@@ -69,29 +98,8 @@ def plot_all(folders_data, ra=True):
             ax.set_ylabel('Score per Episode')
     handles, labels = axesscore[0][0].get_legend_handles_labels()
     figscore.legend(handles, labels, loc='upper center', ncol=4, bbox_to_anchor=bba)
-    figscore.subplots_adjust(top=0.85, bottom=0.23, wspace=0.06, hspace=0.16)
-    figscore.suptitle('Training and Testing Score Performances\n(%d%% Confidence Intervals and Mean bootstrapped over %d computations)' % (int(100 * alpha), nb_computations))
-
-    figtime, axestime = plt.subplots(2, 5, sharex=True, sharey=True)
-    for idx, (method, f_data) in enumerate(folders_data.items()):
-        meandf = f_data["meandf"]
-        lowerdf = f_data["lowerdf"]
-        upperdf = f_data["upperdf"]
-        i = idx // 5
-        j = idx % 5
-        ax = axestime[i][j]
-        ax.plot(meandf.index, meandf['timestamps'], c='b', linewidth=1, label='Time')
-        ax.fill_between(meandf.index, lowerdf['timestamps'], upperdf['timestamps'], color='b', alpha=0.2, label='%d%% CI Time' % int(100 * alpha))
-        ax.grid(True, which="both", linestyle='--', color='k', alpha=0.5)
-        ax.set_title(method)
-        if i == 1:
-            ax.set_xlabel('Episodes')
-        if j == 0:
-            ax.set_ylabel('Time (s)')
-    handles, labels = axestime[0][0].get_legend_handles_labels()
-    figtime.legend(handles, labels, loc='upper center', ncol=2, bbox_to_anchor=bba)
-    figtime.subplots_adjust(top=0.85, bottom=0.23, wspace=0.06, hspace=0.16)
-    figtime.suptitle('Training and Testing Time Performances\n(%d%% Confidence Intervals and Mean bootstrapped over %d computations)' % (int(100 * alpha), nb_computations))
+    # figscore.subplots_adjust(top=0.85, bottom=0.23, wspace=0.06, hspace=0.16)
+    # figscore.suptitle('Performances during %s Phase\n(%d%% Confidence Intervals and Mean bootstrapped over %d computations)' % (test_or_train.title(), int(100 * alpha), nb_computations))
 
 
 def plot_comparison(folders_data, ra=True, test_or_train='test'):
@@ -107,10 +115,10 @@ def plot_comparison(folders_data, ra=True, test_or_train='test'):
     plt.xlabel('Episodes')
     if ra:
         plt.ylabel('Rolling Average Score')
-        plt.title('Mean Rolling Average Score Evolution during %sing Phase\n(Bootstrapped over %d computations)' % (test_or_train.title(), nb_computations))
+        # plt.title('Mean Rolling Average Score Evolution during %sing Phase\n(Bootstrapped over %d computations)' % (test_or_train.title(), nb_computations))
     else:
         plt.ylabel('Score')
-        plt.title('Mean Score Evolution during %sing Phase\n(Bootstrapped over %d computations)' % (test_or_train.title(), nb_computations))
+        # plt.title('Mean Score Evolution during %sing Phase\n(Bootstrapped over %d computations)' % (test_or_train.title(), nb_computations))
     plt.grid(True, which="both", linestyle='--', color='k', alpha=0.5)
     plt.legend(prop={'size': 9})
 
@@ -134,22 +142,23 @@ def plot_first_over(folders_data, ra=True, test_or_train='test', first_over=180,
 
     plt.xlabel('Episodes')
     plt.ylabel('Time (s)')
-    if ra:
-        plt.title('First Time a Rolling Average Score of %d is Reached during %sing Phase\n(Scale and Mean bootstrapped over %d computations)' % (first_over, test_or_train.title(), nb_computations))
-    else:
-        plt.title('First Time a Score of %d is Reached during %sing Phase\n(Scale and Mean bootstrapped over %d computations)' % (first_over, test_or_train.title(), nb_computations))
+    # if ra:
+    #     plt.title('First Time a Rolling Average Score of %d is Reached during %sing Phase\n(Scale and Mean bootstrapped over %d computations)' % (first_over, test_or_train.title(), nb_computations))
+    # else:
+    #     plt.title('First Time a Score of %d is Reached during %sing Phase\n(Scale and Mean bootstrapped over %d computations)' % (first_over, test_or_train.title(), nb_computations))
     plt.grid(True, which="both", linestyle='--', color='k', alpha=0.5)
     plt.legend(prop={'size': 9})
 
 
 if __name__ == "__main__":
-    nb_computations = 10            # Number of computations for bootstrapping
+    nb_computations = 20            # Number of computations for bootstrapping
     alpha = 0.90                    # Confidence interval
-    process_avg_over = 100          # Rolling Average Window
+    process_avg_over = 50          # Rolling Average Window
     ra = True
     first_over = 180
     folders_data = process_folders(os.listdir('Results/'), alpha, nb_computations, process_avg_over, first_over)
-    # plot_all(folders_data, ra=ra)
-    plot_comparison(folders_data, test_or_train='test', ra=ra)
-    # plot_first_over(folders_data, ra=ra, test_or_train='test', first_over=first_over, display_mean=True)
+    # plot_all(folders_data, test_or_train='test', ra=ra)
+    # time_table(folders_data, latex=True)
+    # plot_comparison(folders_data, test_or_train='test', ra=ra)
+    plot_first_over(folders_data, ra=ra, test_or_train='test', first_over=first_over, display_mean=True)
     plt.show()

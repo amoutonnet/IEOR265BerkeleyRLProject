@@ -16,7 +16,7 @@ from tensorflow import random as tf_random
 import pandas as pd
 
 
-SEED = 150
+SEED = 101
 
 random.seed(SEED)
 np.random.seed(SEED)
@@ -221,20 +221,20 @@ if __name__ == "__main__":
             lr_actor=5e-3,                      # Learning rate
             epochs=1,                           # The number of time we train actor and critic on the batch of data obtained during an episode
             a2c_dict={
-                'used': False,                  # Whether or not to use A2C
-                'lr_critic': 1e-2               # The learning rate of the critic
+                'used': True,                   # Whether or not to use A2C
+                'lr_critic': 5e-3,              # The learning rate of the critic
             },
             gae_dict={
-                'used': False,                  # Whether or not to use GAE
+                'used': False,                   # Whether or not to use GAE
                 'lambd': 0.5,                   # lambda for GAE
             },
             entropy_dict={
-                'used': False,                  # Whether or not Entropy Regulaarization is used
+                'used': True,                  # Whether or not Entropy Regulaarization is used
                 'temperature': 1e-3             # Temperature parameter for entropy reg
             },
             ppo_dict={
-                'used': False,                  # Whether or not Proximal policy optimization is used
-                'epsilon': 0.1                  # Epsilon for PPO
+                'used': True,                  # Whether or not Proximal policy optimization is used
+                'epsilon': 0.2                  # Epsilon for PPO
             }
         )
     else:
@@ -272,4 +272,4 @@ if __name__ == "__main__":
     # We set this agent in the simulation
     sim.set_agent(agent)
     # We train the agent for a given number of computations and episodes
-    sim.train(nb_computations=10, max_episodes=400, process_average_over=0, save_training_data=True, plot_evolution=False)
+    sim.train(nb_computations=20, max_episodes=400, process_average_over=0, save_training_data=True, plot_evolution=False)
