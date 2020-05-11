@@ -153,16 +153,34 @@ def plot_first_over(folders_data, ra=True, test_or_train='test', first_over=180,
     plt.yscale('log')
 
 
-def plot_ppo_alone(process_avg_over=50):
-    df = pd.read_csv("Results/excluded/comp1.csv", index_col=None, sep=';')
-    df.index += 1
+def plot_ppo_alone(folder_name, process_avg_over=50, test_or_train='test', alpha = 0.9):
+    path = "Results/excluded/" + folder_name
+    data = []
+    for i in range(1, nb_computations + 1):
+        df = pd.read_csv(path + "/comp%d.csv" %i, index_col=None, sep=';')
+        df.sort_values(by=['timestamps'], inplace=True)  # sort in good order...
+        df.index += 1
+        df["ep"] = df.index
+        df["training_score_ra"] = df["training_score"].rolling(window=process_avg_over, min_periods=1).mean()
+        df["testing_score_ra"] = df["testing_score"].rolling(window=process_avg_over, min_periods=1).mean()
+        data += [df]
     # df["training_score_ra"] = df["training_score"].rolling(window=process_avg_over, min_periods=1).mean()
-    df["testing_score_ra"] = df["testing_score"].rolling(window=process_avg_over, min_periods=1).mean()
+    alldf = pd.concat(data, axis=1, keys=range(len(data)))
+    keydf = alldf.swaplevel(0, 1, axis=1).groupby(level=0, axis=1)
+
+    meandf = keydf.mean()
+    lowerdf = keydf.quantile((1 - alpha) / 2)
+    upperdf = keydf.quantile(1 - (1 - alpha) / 2)
+
     plt.figure()
-    plt.plot(df.index, df["testing_score_ra"])
+    plt.plot(meandf.index, meandf[['%sing_score_ra' % test_or_train]], c='b', linewidth=1, label='Mean %s Score RA' % test_or_train.title())
+    plt.fill_between(meandf.index, lowerdf['%sing_score_ra' % test_or_train], upperdf['%sing_score_ra' % test_or_train],
+                            color='b', alpha=0.2, label='%d%% CI %s RA' % (int(100 * alpha), test_or_train.title()))
+    df["testing_score_ra"] = df["testing_score"].rolling(window=process_avg_over, min_periods=1).mean()
     plt.xlabel("Episodes")
     plt.ylabel("Rolling Average Score")
     plt.grid(True, which="both", linestyle='--', color='k', alpha=0.5)
+    plt.legend()
 
 
 if __name__ == "__main__":
@@ -171,10 +189,10 @@ if __name__ == "__main__":
     process_avg_over = 50          # Rolling Average Window
     ra = True
     first_over = 180
-    folders_data = process_folders(os.listdir('Results/'), alpha, nb_computations, process_avg_over, first_over)
-    plot_all(folders_data, test_or_train='test', ra=ra)
-    time_table(folders_data, latex=True)
-    plot_comparison(folders_data, test_or_train='test', ra=ra)
-    plot_first_over(folders_data, ra=ra, test_or_train='test', first_over=first_over, display_mean=True)
-    # plot_ppo_alone()
+    # folders_data = process_folders(os.listdir('Results/'), alpha, nb_computations, process_avg_over, first_over)
+    # plot_all(folders_data, test_or_train='test', ra=ra)
+    # time_table(folders_data, latex=True)
+    # plot_comparison(folders_data, test_or_train='test', ra=ra)
+    # plot_first_over(folders_data, ra=ra, test_or_train='test', first_over=first_over, display_mean=True)
+    plot_ppo_alone("PGA2C")
     plt.show()
