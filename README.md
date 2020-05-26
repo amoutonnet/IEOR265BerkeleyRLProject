@@ -1,4 +1,4 @@
-# On the use of reinforcement learning to play multiple Atari games
+# On the use of different reinforcement learning algorithms to play CartPole
 
 - First, we used the Open AI Gym library from python to get the environments working. Implementing a program capable of playing (randomly) on CartPole will be our first step.
 - Second, we set up some useful functions to do reinforcement learning: building a storage function to collect the data of observations, taken actions, earned rewards...
